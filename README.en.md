@@ -79,8 +79,10 @@ makepkg = "/usr/bin/makepkg"
 # model = "your-model-id"
 ```
 
-Interface messages and Codex reports use the selected language. Cached reports
-are separated by language. JSON level identifiers remain stable and untranslated.
+Codex must write every summary, finding, and evidence explanation in the language
+selected at startup. Package names, code, URLs, file references, and JSON level
+identifiers remain unchanged. Cached reports are separated by language; reports
+cached before these stricter language requirements are regenerated on the next review.
 Translations are UTF-8 JSON catalogs in `yay_auto_review/locales/`; English
 messages are their keys. Missing or incompatible translations fall back to English.
 
@@ -93,8 +95,10 @@ Remote verification failures never count as “no update”. Cache writes are at
 and private; concurrent identical requests share one review.
 
 Every skipped package is named with the reason for reuse. Cached results still
-require fresh user confirmation. `--noconfirm`, piped input, and missing terminals
-cannot bypass the review gate. Red reports continue to block installation.
+require fresh user confirmation. Prompts and responses use the controlling terminal
+(`/dev/tty`), so confirmation still works when standard input or output is redirected.
+`--noconfirm` and piped input do not provide approval; without an available terminal,
+installation stops. Pressing Enter cancels. Red reports continue to block installation.
 
 The first snapshot includes all checkout files except Git metadata. After the
 review, the makepkg guard checks the approved files again; edits trigger another

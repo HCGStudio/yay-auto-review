@@ -83,7 +83,7 @@ LANG=zh_CN.UTF-8 yay -Syu
 LANG=en_US.UTF-8 yay -Syu
 ```
 
-审查缓存包含启动时确定的报告语言，不会复用另一语言的报告。JSON 的 `green`/`white`/`yellow`/`red` 等机器字段保持不变。
+Codex 的摘要、发现和证据说明均必须使用启动时选定的语言；包名、代码、URL 和文件引用保持原样。JSON 的 `green`/`white`/`yellow`/`red` 等机器字段保持不变。审查缓存按报告语言区分；加强语言要求前生成的旧缓存会在下次审查时重新生成报告。
 
 新增语言时，在 `yay_auto_review/locales/` 添加 UTF-8 JSON 目录，并在 `i18n.py` 注册语言、名称和 `normalize_language` 别名。英文消息是稳定键，缺失或格式不匹配的翻译回退为英文；支持拆分领域目录，如 `zh_CN.installer.json`。
 
@@ -104,7 +104,7 @@ LANG=en_US.UTF-8 yay -Syu
 允许构建并安装 example? [y/N]
 ```
 
-缓存只跳过 Codex 调用，**不会跳过结果提示和本次用户确认**。确认读取 `/dev/tty`；`--noconfirm`、管道里的 `yes`、无终端运行都不能绕过它。默认回车取消；红色无自动放行选项。
+缓存只跳过 Codex 调用，**不会跳过结果提示和本次用户确认**。确认提示和输入都使用当前控制终端 `/dev/tty`，标准输入或输出被重定向时仍能人工确认。`--noconfirm` 和管道里的 `yes` 不代替人工确认；没有可用终端时停止安装。默认回车取消；红色无自动放行选项。
 
 如果用户在 yay 编辑菜单修改了文件，makepkg guard 会在执行前重新审查并确认。构建过程中 `pkgver()` 改写 PKGBUILD 后，下次执行 makepkg 也会重新审查包装文件。此时下载/生成的上游源码不在复核范围，结果至少为黄色并明确提示。
 

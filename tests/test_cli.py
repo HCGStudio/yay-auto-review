@@ -6,10 +6,14 @@ import dataclasses
 import io
 import os
 from pathlib import Path
+import pty
+import select
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -307,30 +311,66 @@ class GateTests(unittest.TestCase):
 
 class ConfirmationTests(unittest.TestCase):
     def test_noconfirm_and_piped_yes_cannot_replace_controlling_terminal(self):
-        with mock.patch.object(cli.sys, "argv", ["yay", "-Syu", "--noconfirm"]), \
-             mock.patch.object(cli.sys, "stdin", io.StringIO("yes\n")), \
-             mock.patch("builtins.open", side_effect=OSError("no controlling terminal")) as opened, \
-             contextlib.redirect_stderr(io.StringIO()):
-            self.assertFalse(cli.confirm("demo", "green"))
-            opened.assert_called_once_with("/dev/tty", "r+", encoding="utf-8", buffering=1)
+        process = subprocess.run(
+            [sys.executable, "-c", "import sys; from yay_auto_review import cli; "
+             "sys.argv = ['yay', '-Syu', '--noconfirm']; print(cli.confirm('demo', 'green'))"],
+            cwd=Path(__file__).resolve().parents[1], env=dict(os.environ, LANG="C.UTF-8"),
+            input="yes\n", text=True, capture_output=True, start_new_session=True, timeout=10,
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(process.stdout.strip(), "False")
+        self.assertIn("No interactive terminal is available", process.stderr)
 
     def test_red_cannot_be_approved_even_with_a_terminal(self):
         with mock.patch("builtins.open") as opened, contextlib.redirect_stderr(io.StringIO()):
             self.assertFalse(cli.confirm("demo", "red"))
             opened.assert_not_called()
 
-    def test_yellow_requires_exact_package_name_and_green_defaults_no(self):
+    def test_real_terminal_prompt_is_flushed_and_response_ignores_piped_stdin(self):
         for level, answer, approved in [
             ("yellow", "demo\n", True), ("yellow", "yes\n", False),
             ("yellow", "\n", False), ("green", "\n", False),
             ("green", "yes\n", True), ("white", "Y\n", True),
         ]:
             with self.subTest(level=level, answer=answer):
-                tty = mock.MagicMock()
-                tty.__enter__.return_value = tty
-                tty.readline.return_value = answer
-                with mock.patch("builtins.open", return_value=tty):
-                    self.assertEqual(cli.confirm("demo", level), approved)
+                master, slave = pty.openpty()
+                try:
+                    # Acquire a real controlling TTY while both standard
+                    # input and output are pipes, as in redirected yay runs.
+                    script = ("import fcntl, sys, termios; "
+                              "fcntl.ioctl(2, termios.TIOCSCTTY, 0); "
+                              "from yay_auto_review import cli; "
+                              "print(cli.confirm('demo', sys.argv[1]))")
+                    with subprocess.Popen(
+                        [sys.executable, "-c", script, level],
+                        cwd=Path(__file__).resolve().parents[1],
+                        env=dict(os.environ, LANG="C.UTF-8"),
+                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=slave,
+                        start_new_session=True,
+                    ) as process:
+                        try:
+                            process.stdin.write(b"yes\n")
+                            process.stdin.flush()
+                            prompt = b""
+                            ending = b"cancel: " if level == "yellow" else b"[y/N] "
+                            deadline = time.monotonic() + 5
+                            while ending not in prompt:
+                                remaining = deadline - time.monotonic()
+                                if remaining <= 0 or not select.select([master], [], [], remaining)[0]:
+                                    self.fail(f"Confirmation prompt did not appear: {prompt!r}")
+                                prompt += os.read(master, 4096)
+                            self.assertIsNone(process.poll(), prompt)
+                            os.write(master, answer.encode())
+                            output, _ = process.communicate(timeout=5)
+                            self.assertEqual(process.returncode, 0, prompt)
+                            self.assertEqual(output.strip(), str(approved).encode())
+                        finally:
+                            if process.poll() is None:
+                                process.kill()
+                                process.communicate()
+                finally:
+                    os.close(master)
+                    os.close(slave)
 
 
 class RemoteHeadTests(unittest.TestCase):

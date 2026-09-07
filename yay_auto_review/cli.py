@@ -205,12 +205,17 @@ def confirm(pkgbase: str, level: str) -> bool:
     try:
         # yay may pipe stdin or use --noconfirm. Neither is consent to bypass
         # this gate. Always read the human decision from the controlling TTY.
-        with open("/dev/tty", "r+", encoding="utf-8", buffering=1) as tty:
+        # Text update mode (r+) requires a seekable stream in Python. A TTY
+        # needs separate readers/writers and a flush before waiting for input.
+        with open("/dev/tty", "r", encoding="utf-8") as reader, \
+             open("/dev/tty", "w", encoding="utf-8") as writer:
             if level == "yellow":
-                tty.write(t('Other issues remain. Type the package name {} to continue, or press Enter to cancel: ', clean_text(pkgbase)))
-                return tty.readline().strip() == pkgbase
-            tty.write(t('Allow building and installing {}? [y/N] ', clean_text(pkgbase)))
-            return tty.readline().strip().lower() in {"y", "yes"}
+                writer.write(t('Other issues remain. Type the package name {} to continue, or press Enter to cancel: ', clean_text(pkgbase)))
+                writer.flush()
+                return reader.readline().strip() == pkgbase
+            writer.write(t('Allow building and installing {}? [y/N] ', clean_text(pkgbase)))
+            writer.flush()
+            return reader.readline().strip().lower() in {"y", "yes"}
     except OSError:
         print(t('No interactive terminal is available to confirm the review; installation is blocked.'), file=sys.stderr)
         return False

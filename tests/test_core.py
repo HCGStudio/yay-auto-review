@@ -254,6 +254,16 @@ class CacheTests(RepositoryTest):
         self.assertFalse(result.cached)
         self.assertEqual(result.level, "green")
 
+    def test_previous_report_language_policy_does_not_reuse_cached_result(self):
+        reviewer = self.reviewer()
+        snapshot = core.snapshot_package(self.repo)
+        with mock.patch.object(reviewer, "_run_codex", return_value=response()) as runner:
+            with mock.patch.object(core, "POLICY_VERSION", "yay-auto-review-v1"):
+                reviewer.review(snapshot)
+            result = reviewer.review(snapshot)
+        self.assertEqual(runner.call_count, 2)
+        self.assertFalse(result.cached)
+
     def test_mutated_snapshot_or_unusable_cache_fails_closed(self):
         snapshot = core.snapshot_package(self.repo)
         snapshot.files["PKGBUILD"] += "\nmalicious()\n"
@@ -284,7 +294,8 @@ class CodexProcessTests(RepositoryTest):
     def test_isolated_process_receives_schema_stdin_and_security_flags(self):
         log = self.base / "invocation.json"
         source = ("import json, os, sys\nfrom pathlib import Path\n"
-                  f"Path({str(log)!r}).write_text(json.dumps({{'args':sys.argv[1:], 'cwd':os.getcwd(), 'prompt':sys.stdin.read()}}))\n"
+                  "schema = json.loads(Path(sys.argv[sys.argv.index('--output-schema')+1]).read_text())\n"
+                  f"Path({str(log)!r}).write_text(json.dumps({{'args':sys.argv[1:], 'cwd':os.getcwd(), 'prompt':sys.stdin.read(), 'schema':schema}}))\n"
                   f"Path(sys.argv[sys.argv.index('--output-last-message')+1]).write_text({json.dumps(response())!r})\n")
         result = self.reviewer(codex_command=self.fake_command(source)).review(core.snapshot_package(self.repo))
         self.assertEqual(result.level, "green", result.findings)
@@ -296,6 +307,9 @@ class CodexProcessTests(RepositoryTest):
                      "features.plugins=false", "project_doc_max_bytes=0", 'web_search="live"']:
             self.assertIn(flag, invocation["args"])
         self.assertIn("UNTRUSTED_PACKAGE_JSON", invocation["prompt"])
+        self.assertTrue(invocation["prompt"].startswith("REPORT LANGUAGE (MANDATORY): English."))
+        self.assertIn("must be written in English", invocation["schema"]["properties"]["summary"]["description"])
+        self.assertNotIn("description", core.RESPONSE_SCHEMA["properties"]["summary"])
 
     def test_timeout_and_nonzero_exit_fail_closed(self):
         for source in ["import time; time.sleep(30)\n", "raise SystemExit(8)\n"]:
