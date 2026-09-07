@@ -33,17 +33,23 @@ def normalize_language(value: str | None) -> str | None:
     return None
 
 
-def resolve_language(language: str = "auto", *, override: str | None = None,
+def resolve_language(language: str = "en", *, override: str | None = None,
                      environ: Mapping[str, str] | None = None) -> str:
-    """CLI > application environment > config > POSIX locale > English.
+    """CLI > application environment > config, with English as the default.
 
-    An unsupported selected locale falls back to English, rather than trying a
+    Only an explicit auto selection opts into POSIX locale detection. An
+    unsupported selected locale falls back to English, rather than trying a
     lower-priority variable. In particular LC_ALL=C must override LANG=zh_CN.
     """
     env = os.environ if environ is None else environ
     for value in (override, env.get("YAY_AUTO_REVIEW_LANG"), language):
-        if value and value.lower() != "auto":
+        if not value:
+            continue
+        if value.lower() != "auto":
             return normalize_language(value) or "en"
+        break
+    else:
+        return "en"
     for key in ("LC_ALL", "LC_MESSAGES", "LANG"):
         if env.get(key):
             return normalize_language(env[key]) or "en"
@@ -54,7 +60,7 @@ def get_language() -> str:
     return _active_language.get() or resolve_language()
 
 
-def set_language(language: str = "auto", *, override: str | None = None) -> str:
+def set_language(language: str = "en", *, override: str | None = None) -> str:
     selected = resolve_language(language, override=override)
     _active_language.set(selected)
     return selected

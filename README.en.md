@@ -16,6 +16,8 @@ new installations, dependencies, and split packages.
 
 Evidence is required for green/white classifications. Familiar package names
 and a source hosted on GitHub alone do not establish official provenance.
+Terminal output marks each result with a colored `●` dot. Redirected output and
+`NO_COLOR` use a plain dot; color names are not printed as status labels.
 
 ## Install from AUR
 
@@ -52,13 +54,18 @@ checkout cannot inject Python modules through the current directory or PYTHONPAT
 
 ## Languages
 
-English (`en`) and Simplified Chinese (`zh_CN`) are supported. Selection order:
+English (`en`) is the default for interface messages and Codex reports, regardless
+of the system locale. Simplified Chinese (`zh_CN`) is available explicitly.
+Selection order:
 
 1. `--lang` on the command line.
 2. `YAY_AUTO_REVIEW_LANG`.
 3. `language` in the configuration file.
-4. `LC_ALL`, then `LC_MESSAGES`, then `LANG`.
-5. English for `C`, `POSIX`, or unsupported locales.
+
+An explicit `auto` at the highest selected priority opts into `LC_ALL`, then
+`LC_MESSAGES`, then `LANG`. `C`, `POSIX`, and unsupported locales use English.
+For example, `--lang auto` follows the system locale even when the configuration
+sets `language = "en"`. AUR package installation instructions always use English.
 
 ```sh
 yay-auto-review --lang en --help
@@ -70,7 +77,7 @@ Create `~/.config/yay-auto-review/config.toml` (or the corresponding
 `XDG_CONFIG_HOME` path) to configure persistent preferences:
 
 ```toml
-language = "auto"
+language = "en"
 codex = "codex"
 timeout_seconds = 300
 makepkg = "/usr/bin/makepkg"

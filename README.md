@@ -15,6 +15,8 @@
 
 “知名”由 Codex 提供声誉依据；项目名或托管平台本身不能证明来源官方。插件要求绿色/白色具有开源、官方来源、声誉及脚本安全证据，并检查结构化结果之间是否一致。证据不足时降为黄色。
 
+终端输出使用相应颜色的 `●` 圆点标记结果，不显示颜色名称标签。输出重定向或设置 `NO_COLOR` 时使用不着色的圆点。
+
 ## 安装
 
 ### 从 AUR 安装
@@ -70,7 +72,7 @@ yay -S aur-package-name
 
 ## 语言 / i18n
 
-支持英文 `en` 和简体中文 `zh_CN`，默认 `auto` 跟随系统环境。选择优先级为：命令行 `--lang` → `YAY_AUTO_REVIEW_LANG` → 配置 `language` → `LC_ALL` → `LC_MESSAGES` → `LANG` → 英文。`C`/`POSIX` 以及未支持的系统语言使用英文。
+界面、提示、错误和 Codex 报告默认使用英文 `en`，不跟随系统语言；也支持显式选择简体中文 `zh_CN`。选择优先级为：命令行 `--lang` → `YAY_AUTO_REVIEW_LANG` → 配置 `language`。仅当最高优先级的显式选择为 `auto` 时，才按 `LC_ALL` → `LC_MESSAGES` → `LANG` 读取系统语言；`C`/`POSIX` 以及未支持的语言使用英文。例如，`--lang auto` 会覆盖配置中的 `language = "en"` 并跟随系统语言。AUR 包安装后的提示始终使用英文。
 
 ```sh
 yay-auto-review --lang en --help
@@ -136,7 +138,7 @@ JSON 缓存只对当前用户可读写，使用文件锁和原子替换；并发
 
 ```toml
 codex = "codex"
-language = "auto"
+language = "en"
 # model = "your-model-id"
 timeout_seconds = 300
 makepkg = "/usr/bin/makepkg"

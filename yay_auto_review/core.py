@@ -76,7 +76,7 @@ class ReviewConfig:
     cache_dir: Path | None = None
     ttl_seconds: float = CACHE_TTL_SECONDS
     cache_context: str = ""
-    language: str = "auto"
+    language: str = "en"
 
     def __post_init__(self) -> None:
         if not isinstance(self.language, str) or self.language not in {"auto", "en", "zh_CN"}:

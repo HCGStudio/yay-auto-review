@@ -15,7 +15,13 @@ from yay_auto_review import cli, core, i18n
 
 
 class LocaleResolutionTests(unittest.TestCase):
-    def test_posix_precedence_and_empty_values(self):
+    def test_default_is_english_regardless_of_system_locale(self):
+        for env in ({}, {"LANG": "zh_CN.UTF-8"},
+                    {"LC_ALL": "zh_CN.UTF-8", "LC_MESSAGES": "zh_CN", "LANG": "zh_CN"}):
+            with self.subTest(env=env):
+                self.assertEqual(i18n.resolve_language(environ=env), "en")
+
+    def test_explicit_auto_uses_posix_precedence_and_empty_values(self):
         cases = [
             ({}, "en"),
             ({"LANG": "zh_CN.UTF-8"}, "zh_CN"),
@@ -27,7 +33,7 @@ class LocaleResolutionTests(unittest.TestCase):
         ]
         for env, expected in cases:
             with self.subTest(env=env):
-                self.assertEqual(i18n.resolve_language(environ=env), expected)
+                self.assertEqual(i18n.resolve_language("auto", environ=env), expected)
 
     def test_application_environment_config_and_cli_precedence(self):
         env = {"LANG": "en_US.UTF-8"}
@@ -36,7 +42,11 @@ class LocaleResolutionTests(unittest.TestCase):
         self.assertEqual(i18n.resolve_language("zh_CN", environ=env), "en")
         self.assertEqual(i18n.resolve_language("en", override="zh_CN", environ=env), "zh_CN")
         env["YAY_AUTO_REVIEW_LANG"] = "auto"
-        self.assertEqual(i18n.resolve_language("zh_CN", environ=env), "zh_CN")
+        self.assertEqual(i18n.resolve_language("zh_CN", environ=env), "en")
+        env["LANG"] = "zh_CN.UTF-8"
+        self.assertEqual(i18n.resolve_language("en", environ=env), "zh_CN")
+        env["YAY_AUTO_REVIEW_LANG"] = "en"
+        self.assertEqual(i18n.resolve_language("en", override="auto", environ=env), "zh_CN")
         env["YAY_AUTO_REVIEW_LANG"] = "fr_FR"
         self.assertEqual(i18n.resolve_language("zh_CN", environ=env), "en")
 
@@ -64,7 +74,7 @@ class LocaleResolutionTests(unittest.TestCase):
     def test_chinese_catalog_covers_all_literal_python_messages(self):
         root = Path(__file__).resolve().parents[1] / "yay_auto_review"
         catalog = i18n._catalog("zh_CN")
-        messages = set(cli.LABELS.values())
+        messages = set()
         for path in (root / "core.py", root / "cli.py", root / "installer.py"):
             for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
                 if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
@@ -110,6 +120,26 @@ class ConfigAndCliLanguageTests(unittest.TestCase):
         self.config.write_text('language = "zh_CN"\ntimeout_seconds = 0\n', encoding="utf-8")
         with self.assertRaisesRegex(cli.GateError, "必须为"):
             cli.load_config()
+
+    def test_default_cli_and_report_language_ignore_chinese_system_locale(self):
+        with mock.patch.dict(os.environ, {"LANG": "zh_CN.UTF-8", "LC_ALL": "zh_CN.UTF-8"}):
+            code, output, error = self.invoke(["--help"])
+            self.assertEqual(code, 0, error)
+            self.assertIn("Review AUR packages with Codex", output)
+            self.assertNotRegex(output, r"[\u4e00-\u9fff]")
+            config, _ = cli.load_config()
+            self.assertEqual(config.language, "en")
+            self.assertEqual(core.ReviewConfig().language, "en")
+
+    def test_explicit_auto_overrides_english_config_and_follows_locale(self):
+        self.config.write_text('language = "en"\n', encoding="utf-8")
+        with mock.patch.dict(os.environ, {"LANG": "zh_CN.UTF-8"}):
+            code, output, error = self.invoke(["--lang", "auto", "--help"])
+            self.assertEqual(code, 0, error)
+            self.assertIn("用法", output)
+            self.config.write_text('language = "auto"\n', encoding="utf-8")
+            config, _ = cli.load_config()
+            self.assertEqual(config.language, "zh_CN")
 
     def test_invalid_config_language_fails_closed(self):
         for value in ('"de"', '42', '["en"]', '{ x = "en" }'):
@@ -195,7 +225,7 @@ class ConfigAndCliLanguageTests(unittest.TestCase):
         output = io.StringIO()
         with mock.patch.object(cli, "makepkg_gate", side_effect=gate), contextlib.redirect_stderr(output):
             self.assertEqual(cli.makepkg_main(), 1)
-        self.assertIn("[红色]", output.getvalue())
+        self.assertIn("●", output.getvalue())
         self.assertIn("非法的 AUR pkgbase", output.getvalue())
 
 
@@ -265,13 +295,13 @@ class ReviewLanguageTests(unittest.TestCase):
 
     def test_display_and_confirmation_localize_without_weakening_red_gate(self):
         result = core.ReviewResult("white", "example", cached=True, cache_reason="unchanged")
-        for language, label, skipped in (("en", "White", "Review skipped"), ("zh_CN", "白色", "跳过 review")):
+        for language, skipped in (("en", "Review skipped"), ("zh_CN", "跳过 review")):
             output = io.StringIO()
             with i18n.use_language(language), contextlib.redirect_stderr(output), mock.patch("builtins.open") as terminal:
                 cli.display("demo", result)
                 self.assertFalse(cli.confirm("demo", "red"))
                 terminal.assert_not_called()
-            self.assertIn("[" + label + "]", output.getvalue())
+            self.assertIn("● demo — example", output.getvalue())
             self.assertIn(skipped, output.getvalue())
 
 

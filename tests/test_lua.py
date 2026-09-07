@@ -113,11 +113,14 @@ class LuaHookTests(unittest.TestCase):
             self.assertNotEqual(process.returncode, 0)
             self.assertIn("ABORT:", process.stderr)
 
-    def test_lua_errors_follow_environment_and_posix_precedence(self):
+    def test_lua_defaults_to_english_and_explicit_auto_follows_posix_precedence(self):
         cases = [
             ({"YAY_AUTO_REVIEW_LANG": "zh_CN", "LC_ALL": "C"}, "缺少 AURPreInstall"),
             ({"YAY_AUTO_REVIEW_LANG": "", "LC_ALL": "C", "LANG": "zh_CN"}, "missing AURPreInstall"),
-            ({"YAY_AUTO_REVIEW_LANG": "", "LC_ALL": "", "LC_MESSAGES": "zh_CN", "LANG": "en"}, "缺少 AURPreInstall"),
+            ({"YAY_AUTO_REVIEW_LANG": "", "LC_ALL": "zh_CN", "LANG": "zh_CN"}, "missing AURPreInstall"),
+            ({"YAY_AUTO_REVIEW_LANG": "", "LC_ALL": "", "LC_MESSAGES": "zh_CN", "LANG": "en"}, "missing AURPreInstall"),
+            ({"YAY_AUTO_REVIEW_LANG": "auto", "LC_ALL": "", "LC_MESSAGES": "zh_CN", "LANG": "en"}, "缺少 AURPreInstall"),
+            ({"YAY_AUTO_REVIEW_LANG": "auto", "LC_ALL": "C", "LANG": "zh_CN"}, "missing AURPreInstall"),
             ({"YAY_AUTO_REVIEW_LANG": "fr", "LC_ALL": "zh_CN"}, "missing AURPreInstall"),
         ]
         for variables, message in cases:

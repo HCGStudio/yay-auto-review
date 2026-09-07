@@ -331,6 +331,80 @@ class ConfirmationTests(unittest.TestCase):
                     self.assertEqual(cli.confirm("demo", level), approved)
 
 
+class RemoteHeadTests(unittest.TestCase):
+    def test_single_and_duplicate_identical_heads_are_accepted(self):
+        for width in (40, 64):
+            head = "a" * width
+            for count in (1, 2):
+                with self.subTest(width=width, count=count), \
+                     mock.patch.object(cli.subprocess, "run", return_value=
+                                       subprocess.CompletedProcess([], 0, (head + "\tHEAD\n") * count)):
+                    self.assertEqual(cli.remote_head("demo"), head)
+
+    def test_empty_malformed_or_conflicting_heads_fail_closed(self):
+        head = "a" * 40
+        outputs = ("", "\n", "invalid\tHEAD\n", head + "\trefs/heads/master\n",
+                   head + "\tHEAD extra\n", head + "\tHEAD\n" + "b" * 40 + "\tHEAD\n",
+                   head + "\tHEAD\nmalformed\n", head + "\tHEAD " + head + "\tHEAD\n")
+        for output in outputs:
+            with self.subTest(output=output), \
+                 mock.patch.object(cli.subprocess, "run", return_value=
+                                   subprocess.CompletedProcess([], 0, output)), \
+                 self.assertRaises(cli.GateError):
+                cli.remote_head("demo")
+
+    def test_transport_failure_blocks_verification(self):
+        for error in (subprocess.CalledProcessError(2, "git"), subprocess.TimeoutExpired("git", 30),
+                      OSError("unavailable")):
+            with self.subTest(error=error), mock.patch.object(cli.subprocess, "run", side_effect=error), \
+                 self.assertRaises(cli.GateError):
+                cli.remote_head("demo")
+
+    def test_remote_check_ignores_checkout_and_git_environment_overrides(self):
+        head = "a" * 40
+        with mock.patch.dict(os.environ, {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "url.evil.insteadOf",
+                                          "GIT_CONFIG_VALUE_0": "https://aur.archlinux.org/"}), \
+             mock.patch.object(cli.subprocess, "run", return_value=
+                               subprocess.CompletedProcess([], 0, head + "\tHEAD\n")) as run:
+            self.assertEqual(cli.remote_head("demo"), head)
+        command = run.call_args.args[0]
+        self.assertEqual(command[-2:], ["https://aur.archlinux.org/demo.git", "HEAD"])
+        self.assertIn("protocol.allow=never", command)
+        self.assertIn("protocol.https.allow=always", command)
+        self.assertIn("credential.helper=", command)
+        self.assertEqual(run.call_args.kwargs["cwd"], "/")
+        env = run.call_args.kwargs["env"]
+        self.assertEqual({key: value for key, value in env.items() if key.startswith("GIT_")},
+                         {"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"})
+
+
+class StatusDisplayTests(unittest.TestCase):
+    def test_terminal_colors_only_the_dot_for_every_level(self):
+        for level, code in (("green", "32"), ("white", "37"), ("yellow", "33"), ("red", "31")):
+            output = io.StringIO()
+            with self.subTest(level=level), mock.patch.dict(os.environ, {}, clear=True), \
+                 mock.patch.object(output, "isatty", return_value=True), contextlib.redirect_stderr(output):
+                cli.display("demo", core.ReviewResult(level, "example"))
+            self.assertEqual(output.getvalue(), f"\n\033[{code}m●\033[0m demo — example\n")
+
+    def test_redirected_and_no_color_output_use_plain_dot(self):
+        for tty, env in ((False, {}), (True, {"NO_COLOR": ""})):
+            output = io.StringIO()
+            with self.subTest(tty=tty), mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(output, "isatty", return_value=tty), contextlib.redirect_stderr(output):
+                cli.display("demo", core.ReviewResult("yellow", "example"))
+            self.assertEqual(output.getvalue(), "\n● demo — example\n")
+
+    def test_errors_use_red_dot_and_sanitize_untrusted_text(self):
+        output = io.StringIO()
+        def fail():
+            raise cli.GateError("untrusted\033[32m\nmessage")
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(output, "isatty", return_value=True), contextlib.redirect_stderr(output):
+            self.assertEqual(cli.run_safely(fail), 1)
+        self.assertEqual(output.getvalue(), "\033[31m●\033[0m untrusted [32m message\n")
+
+
 class YayOverrideTests(unittest.TestCase):
     def test_cli_flags_cannot_replace_guard_or_build_directory(self):
         for flag in ("--makepkg", "--makepkg=evil", "--builddir=/tmp/old",

@@ -5,13 +5,12 @@
 -- clean/diff/edit menus and the first makepkg --verifysource invocation.
 -- The makepkg guard checks the approved files again after those menus.
 
--- Match Python's environment/locale selection even if the helper is missing.
+-- Default to English; only explicit auto opts into the system locale.
 -- After session creation the helper supplies the selected config language.
 local function selected_language()
-    local override = os.getenv("YAY_AUTO_REVIEW_LANG")
-    if override and (override == "" or override:lower() == "auto") then override = nil end
-    local value = override
-    if not value then
+    local value = os.getenv("YAY_AUTO_REVIEW_LANG")
+    if value and value:lower() == "auto" then
+        value = nil
         for _, key in ipairs({"LC_ALL", "LC_MESSAGES", "LANG"}) do
             local candidate = os.getenv(key)
             if candidate and candidate ~= "" then value = candidate; break end

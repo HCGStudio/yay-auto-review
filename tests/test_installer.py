@@ -182,6 +182,30 @@ class InstallerTests(unittest.TestCase):
                 if language == 'zh_CN':
                     self.assertRegex(process.stdout, r'[\u4e00-\u9fff]')
 
+    def test_installed_launcher_defaults_to_english_in_chinese_locale(self):
+        self.install()
+        process = subprocess.run(
+            [str(self.prefix / 'bin' / 'yay-auto-review'), '--help'],
+            env=dict(os.environ, LANG='zh_CN.UTF-8', LC_ALL='zh_CN.UTF-8', YAY_AUTO_REVIEW_LANG=''),
+            capture_output=True, text=True, timeout=10)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertIn('Review AUR packages with Codex', process.stdout)
+        self.assertNotRegex(process.stdout, r'[\u4e00-\u9fff]')
+
+    def test_aur_installation_instructions_are_always_english(self):
+        install_hook = Path(__file__).resolve().parents[1] / 'packaging' / 'aur' / 'yay-auto-review.install'
+        for language in ('', 'en', 'zh_CN', 'auto'):
+            with self.subTest(language=language):
+                process = subprocess.run(
+                    ['bash', '--noprofile', '--norc', '-c', 'source "$1"; post_install', 'bash', str(install_hook)],
+                    env=dict(os.environ, LANG='zh_CN.UTF-8', LC_ALL='zh_CN.UTF-8',
+                             YAY_AUTO_REVIEW_LANG=language),
+                    capture_output=True, text=True, timeout=10)
+                self.assertEqual(process.returncode, 0, process.stderr)
+                self.assertIn('Installed. Run as your regular user:', process.stdout)
+                self.assertIn('/usr/bin/yay-auto-review enable', process.stdout)
+                self.assertNotRegex(process.stdout, r'[\u4e00-\u9fff]')
+
     def test_enable_requires_existing_package_and_regular_user(self):
         with self.assertRaises(cli.GateError):
             installer.enable(self.prefix)

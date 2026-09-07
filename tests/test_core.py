@@ -212,7 +212,7 @@ class CacheTests(RepositoryTest):
         self.assertEqual(first.level, "green")
         self.assertFalse(first.cached)
         self.assertTrue(second.cached)
-        self.assertIn("1 小时", second.cache_reason)
+        self.assertIn("1 hour", second.cache_reason)
         self.assertEqual(runner.call_count, 1)
         self.assertEqual(stat.S_IMODE(self.cache.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE(next(self.cache.glob("*.json")).stat().st_mode), 0o600)

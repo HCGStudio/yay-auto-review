@@ -23,7 +23,6 @@ from .i18n import (SUPPORTED_LANGUAGES, get_language, localized_argparse,
                    resolve_language, set_language, t, use_language)
 
 SESSION_ENV = "YAY_AUTO_REVIEW_SESSION"
-LABELS = {"green": 'Green', "white": 'White', "yellow": 'Yellow', "red": 'Red'}
 COLORS = {"green": "32", "white": "37", "yellow": "33", "red": "31"}
 NAME = re.compile(r"[a-z0-9][a-z0-9@._+\-]*\Z")
 SESSION = re.compile(r"[0-9a-f]{32}\Z")
@@ -72,7 +71,7 @@ def config_data() -> dict:
 
 def load_config() -> tuple[ReviewConfig, str]:
     data = config_data()
-    language = data.get("language", "auto")
+    language = data.get("language", "en")
     if not isinstance(language, str) or language not in {"auto", *SUPPORTED_LANGUAGES}:
         raise GateError(t("language must be auto, en or zh_CN"))
     set_language(language, override=_language_override.get())
@@ -169,19 +168,33 @@ def remote_head(pkgbase: str) -> str:
              "-c", "protocol.https.allow=always", "ls-remote", "--exit-code",
              f"https://aur.archlinux.org/{pkgbase}.git", "HEAD"],
             cwd="/", env=env, capture_output=True, text=True, timeout=30, check=True)
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, UnicodeError):
         raise GateError(t('Cannot verify the latest commit with AUR; cached review and installation are blocked')) from None
-    fields = result.stdout.strip().split()
-    if len(fields) != 2 or fields[1] != "HEAD" or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", fields[0]):
+    # AUR can advertise the same HEAD more than once. Require every record to
+    # be a valid HEAD and every advertised commit to agree before trusting it.
+    heads = set()
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        fields = line.split()
+        if len(fields) != 2 or fields[1] != "HEAD" or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", fields[0]):
+            raise GateError(t('AUR returned an invalid Git HEAD'))
+        heads.add(fields[0])
+    if len(heads) != 1:
         raise GateError(t('AUR returned an invalid Git HEAD'))
-    return fields[0]
+    return heads.pop()
+
+
+def status_dot(level: str) -> str:
+    """Color only the status marker; redirected output stays escape-free."""
+    dot = "●"
+    if sys.stderr.isatty() and "NO_COLOR" not in os.environ:
+        dot = f"\033[{COLORS[level]}m{dot}\033[0m"
+    return dot
 
 
 def display(pkgbase: str, result) -> None:
-    label = t(LABELS[result.level])
-    if sys.stderr.isatty() and "NO_COLOR" not in os.environ:
-        label = f"\033[{COLORS[result.level]}m{label}\033[0m"
-    print(f"\n[{label}] {clean_text(pkgbase)} — {clean_text(result.summary)}", file=sys.stderr)
+    print(f"\n{status_dot(result.level)} {clean_text(pkgbase)} — {clean_text(result.summary)}", file=sys.stderr)
     if result.cached:
         print(t('  Review skipped: {}; {}', clean_text(pkgbase), clean_text(result.cache_reason)), file=sys.stderr)
     for finding in result.findings:
@@ -194,7 +207,7 @@ def display(pkgbase: str, result) -> None:
 
 def confirm(pkgbase: str, level: str) -> bool:
     if level == "red":
-        print(t('Red result: this build and installation are blocked. Fix the issues and review again.'), file=sys.stderr)
+        print(t('This build and installation are blocked. Fix the issues and review again.'), file=sys.stderr)
         return False
     try:
         # yay may pipe stdin or use --noconfirm. Neither is consent to bypass
@@ -345,12 +358,12 @@ def run_safely(action) -> int:
         print(t('\nReview cancelled; installation stopped.'), file=sys.stderr)
         return 130
     except (GateError, SnapshotError, OSError, ValueError, subprocess.SubprocessError) as exc:
-        print(t('[Red] {}', clean_text(exc)), file=sys.stderr)
+        print(f"{status_dot('red')} {clean_text(exc)}", file=sys.stderr)
         return 1
 
 
 def select_config_language(override: str | None = None) -> str:
-    language = config_data().get("language", "auto")
+    language = config_data().get("language", "en")
     if not isinstance(language, str) or language not in {"auto", *SUPPORTED_LANGUAGES}:
         raise GateError(t("language must be auto, en or zh_CN"))
     return set_language(language, override=override)
@@ -381,7 +394,7 @@ def _main(argv: list[str] | None = None) -> int:
 def _parse_and_dispatch(argv: list[str], selected_language: str | None) -> int:
     parser = argparse.ArgumentParser(description=t('Review AUR packages with Codex before yay builds them'))
     parser.add_argument("--lang", choices=("auto", *SUPPORTED_LANGUAGES),
-                        help=t("Report and interface language (default: auto)"))
+                        help=t("Report and interface language (default: en)"))
     if selected_language is not None and selected_language not in {"auto", *SUPPORTED_LANGUAGES}:
         parser.error(t("language must be auto, en or zh_CN"))
     sub = parser.add_subparsers(dest="command", required=True)
