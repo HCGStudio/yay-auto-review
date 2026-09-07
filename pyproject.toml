@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aur-auto-review"
+version = "0.1.0"
+description = "Review AUR package recipes with Codex before yay builds them"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "GPL-3.0-only"}
+dependencies = []
+
+[project.scripts]
+aur-auto-review = "aur_auto_review.cli:main"
+aur-auto-review-makepkg = "aur_auto_review.cli:makepkg_main"
+
+[tool.setuptools]
+packages = ["aur_auto_review"]
+
+[tool.setuptools.data-files]
+"share/aur-auto-review" = ["lua/aur-auto-review.lua", "config.example.toml"]
