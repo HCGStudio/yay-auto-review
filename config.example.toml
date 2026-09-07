@@ -1,14 +1,14 @@
-# ~/.config/aur-auto-review/config.toml
+# ~/.config/yay-auto-review/config.toml
 # Codex CLI must already be logged in (codex login).
 # UI and Codex report language: auto, en or zh_CN.
-# Priority: --lang > AUR_AUTO_REVIEW_LANG > language > LC_ALL > LC_MESSAGES > LANG.
+# Priority: --lang > YAY_AUTO_REVIEW_LANG > language > LC_ALL > LC_MESSAGES > LANG.
 # C/POSIX and unsupported locales use English. Language changes invalidate cache.
 language = "auto"
 codex = "codex"
 # Unset uses the Codex CLI default model. User config is not loaded.
 # model = "your-model-id"
 timeout_seconds = 300
-# Default: $XDG_CACHE_HOME/aur-auto-review (or ~/.cache/aur-auto-review).
+# Default: $XDG_CACHE_HOME/yay-auto-review (or ~/.cache/yay-auto-review).
 # cache_dir = "/absolute/path/to/cache"
-# Real makepkg executable; never point this at aur-auto-review-makepkg.
+# Real makepkg executable; never point this at yay-auto-review-makepkg.
 makepkg = "/usr/bin/makepkg"

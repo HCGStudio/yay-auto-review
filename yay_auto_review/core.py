@@ -22,7 +22,7 @@ from typing import Any, Iterable, Iterator, Literal
 
 from .i18n import LANGUAGE_NAMES, get_language, normalize_language, t, use_language
 
-POLICY_VERSION = "aur-review-v1"
+POLICY_VERSION = "yay-auto-review-v1"
 CACHE_TTL_SECONDS = 3600
 MAX_FILE_BYTES = 512 * 1024
 MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024
@@ -342,7 +342,7 @@ def parse_response(data: Any, *, reviewed_at: float, issues: tuple[str, ...] = (
 
 def _default_cache_dir() -> Path:
     base = os.environ.get("XDG_CACHE_HOME")
-    return (Path(base) if base else Path.home() / ".cache") / "aur-auto-review"
+    return (Path(base) if base else Path.home() / ".cache") / "yay-auto-review"
 
 
 def _cache_key(snapshot: Snapshot, config: ReviewConfig) -> str:
@@ -450,7 +450,7 @@ class Reviewer:
             return ReviewResult("red", t('Review could not be completed reliably; further build or installation is blocked'), (str(exc),), reviewed_at=now)
 
     def _run_codex(self, snapshot: Snapshot) -> Any:
-        with tempfile.TemporaryDirectory(prefix="aur-review-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="yay-auto-review-") as temporary:
             work = Path(temporary)
             schema = work / "response-schema.json"
             output = work / "response.json"

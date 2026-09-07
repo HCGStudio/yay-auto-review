@@ -10,7 +10,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PLUGIN = ROOT / "lua" / "aur-auto-review.lua"
+PLUGIN = ROOT / "lua" / "yay-auto-review.lua"
 LUA = shutil.which("lua5.1") or shutil.which("lua")
 
 
@@ -29,7 +29,7 @@ class LuaHookTests(unittest.TestCase):
             os.getenv = function(key) return runtime_env[key] or real_getenv(key) end
             os.setenv = function(key, value) runtime_env[key] = value; return true end
             io.popen = function(command, mode)
-                assert(command == "'aur-auto-review' 'session'")
+                assert(command == "'yay-auto-review' 'session'")
                 assert(mode == 'r')
                 return {
                     read = function() return string.rep('a', 32) .. '\\n' end,
@@ -46,10 +46,10 @@ class LuaHookTests(unittest.TestCase):
                 end,
             }
         """ + setup + "\ndofile(" + lua_string(PLUGIN) + ")\n" + """
-            assert(yay.opt.makepkg_bin == 'aur-auto-review-makepkg')
+            assert(yay.opt.makepkg_bin == 'yay-auto-review-makepkg')
             assert(yay.opt.redownload == 'all')
-            assert(os.getenv('AUR_AUTO_REVIEW_SESSION') == string.rep('a', 32))
-            assert(yay.opt.build_dir:match('/aur%-auto%-review/builds/' .. string.rep('a', 32) .. '$'))
+            assert(os.getenv('YAY_AUTO_REVIEW_SESSION') == string.rep('a', 32))
+            assert(yay.opt.build_dir:match('/yay%-auto%-review/builds/' .. string.rep('a', 32) .. '$'))
             local event = {
                 match = 'example',
                 data = {base = 'example', dir = '/tmp/example',
@@ -58,7 +58,7 @@ class LuaHookTests(unittest.TestCase):
         """ + body
         return subprocess.run(
             [LUA, "-"], input=harness, text=True, errors="replace", capture_output=True,
-            env=dict(os.environ, AUR_AUTO_REVIEW_LANG="en") if env is None else env, timeout=10,
+            env=dict(os.environ, YAY_AUTO_REVIEW_LANG="en") if env is None else env, timeout=10,
         )
 
     def test_approvals_accept_only_explicit_success(self):
@@ -84,7 +84,7 @@ class LuaHookTests(unittest.TestCase):
             temp_path = Path(temp)
             log = temp_path / "argv.json"
             marker = temp_path / "injected"
-            executable = temp_path / "aur-auto-review"
+            executable = temp_path / "yay-auto-review"
             executable.write_text(
                 "#!/usr/bin/python3\nimport json, os, sys\n"
                 "open(os.environ['TEST_ARGV_LOG'], 'w').write(json.dumps(sys.argv[1:]))\n",
@@ -115,10 +115,10 @@ class LuaHookTests(unittest.TestCase):
 
     def test_lua_errors_follow_environment_and_posix_precedence(self):
         cases = [
-            ({"AUR_AUTO_REVIEW_LANG": "zh_CN", "LC_ALL": "C"}, "缺少 AURPreInstall"),
-            ({"AUR_AUTO_REVIEW_LANG": "", "LC_ALL": "C", "LANG": "zh_CN"}, "missing AURPreInstall"),
-            ({"AUR_AUTO_REVIEW_LANG": "", "LC_ALL": "", "LC_MESSAGES": "zh_CN", "LANG": "en"}, "缺少 AURPreInstall"),
-            ({"AUR_AUTO_REVIEW_LANG": "fr", "LC_ALL": "zh_CN"}, "missing AURPreInstall"),
+            ({"YAY_AUTO_REVIEW_LANG": "zh_CN", "LC_ALL": "C"}, "缺少 AURPreInstall"),
+            ({"YAY_AUTO_REVIEW_LANG": "", "LC_ALL": "C", "LANG": "zh_CN"}, "missing AURPreInstall"),
+            ({"YAY_AUTO_REVIEW_LANG": "", "LC_ALL": "", "LC_MESSAGES": "zh_CN", "LANG": "en"}, "缺少 AURPreInstall"),
+            ({"YAY_AUTO_REVIEW_LANG": "fr", "LC_ALL": "zh_CN"}, "missing AURPreInstall"),
         ]
         for variables, message in cases:
             with self.subTest(variables=variables):
@@ -128,11 +128,11 @@ class LuaHookTests(unittest.TestCase):
 
     def test_lua_uses_language_selected_by_session_helper(self):
         with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary) / "aur-auto-review" / "builds" / ("a" * 32)
+            directory = Path(temporary) / "yay-auto-review" / "builds" / ("a" * 32)
             directory.mkdir(parents=True)
             (directory / ".language").write_text("zh_CN\n", encoding="ascii")
             process = self.run_hook("callback(nil)", env=dict(
-                os.environ, AUR_AUTO_REVIEW_LANG="en", XDG_CACHE_HOME=temporary,
+                os.environ, YAY_AUTO_REVIEW_LANG="en", XDG_CACHE_HOME=temporary,
             ))
             self.assertNotEqual(process.returncode, 0)
             self.assertIn("缺少 AURPreInstall", process.stderr)
@@ -147,7 +147,7 @@ class LuaHookTests(unittest.TestCase):
             "event.data.last_modified = '12345'",
             "yay.opt.makepkg_bin = 'makepkg'", "yay.opt.redownload = 'no'",
             "yay.opt.build_dir = '/tmp/unsafe'",
-            "os.setenv('AUR_AUTO_REVIEW_SESSION', 'other')",
+            "os.setenv('YAY_AUTO_REVIEW_SESSION', 'other')",
         ]
         for mutation in cases:
             with self.subTest(mutation=mutation):
@@ -218,10 +218,10 @@ class NativeYayConfigTests(unittest.TestCase):
             config.mkdir()
             binary_dir = Path(temp) / "bin"
             binary_dir.mkdir()
-            helper = binary_dir / "aur-auto-review"
+            helper = binary_dir / "yay-auto-review"
             helper.write_text(
                 "#!/bin/sh\n[ \"$1\" = session ] || exit 1\n"
-                "mkdir -p -- \"$XDG_CACHE_HOME/aur-auto-review/builds/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n"
+                "mkdir -p -- \"$XDG_CACHE_HOME/yay-auto-review/builds/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n"
                 "printf '%s\\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n", encoding="utf-8",
             )
             helper.chmod(0o755)
@@ -230,15 +230,15 @@ class NativeYayConfigTests(unittest.TestCase):
             )
             result = subprocess.run(
                 ["yay", "-Pg"], text=True, capture_output=True, timeout=10,
-                env=dict(os.environ, AUR_AUTO_REVIEW_LANG="en", XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp,
+                env=dict(os.environ, YAY_AUTO_REVIEW_LANG="en", XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp,
                          PATH=str(binary_dir) + os.pathsep + os.environ["PATH"]),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             settings = json.loads(result.stdout)
-            self.assertEqual(settings["makepkgbin"], "aur-auto-review-makepkg")
+            self.assertEqual(settings["makepkgbin"], "yay-auto-review-makepkg")
             self.assertEqual(settings["redownload"], "all")
             self.assertEqual(settings["buildDir"],
-                             temp + "/aur-auto-review/builds/" + "a" * 32)
+                             temp + "/yay-auto-review/builds/" + "a" * 32)
 
     def test_save_and_overrides_abort_without_changing_existing_config(self):
         version = subprocess.run(["yay", "--version"], text=True, capture_output=True, timeout=10)
@@ -259,13 +259,13 @@ class NativeYayConfigTests(unittest.TestCase):
                 with self.subTest(argument=argument):
                     result = subprocess.run(
                         ["yay", "-Pg", argument], text=True, capture_output=True, timeout=10,
-                        env=dict(os.environ, AUR_AUTO_REVIEW_LANG="en", XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp),
+                        env=dict(os.environ, YAY_AUTO_REVIEW_LANG="en", XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp),
                     )
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("unsupported override", result.stderr)
                     self.assertEqual(settings.read_text(encoding="utf-8"), original)
                     self.assertEqual(init.read_bytes(), original_init)
-                    self.assertFalse((Path(temp) / "aur-auto-review" / "builds").exists())
+                    self.assertFalse((Path(temp) / "yay-auto-review" / "builds").exists())
 
 
 if __name__ == "__main__":

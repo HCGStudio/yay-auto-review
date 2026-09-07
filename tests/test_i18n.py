@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from aur_auto_review import cli, core, i18n
+from yay_auto_review import cli, core, i18n
 
 
 class LocaleResolutionTests(unittest.TestCase):
@@ -32,12 +32,12 @@ class LocaleResolutionTests(unittest.TestCase):
     def test_application_environment_config_and_cli_precedence(self):
         env = {"LANG": "en_US.UTF-8"}
         self.assertEqual(i18n.resolve_language("zh_CN", environ=env), "zh_CN")
-        env["AUR_AUTO_REVIEW_LANG"] = "en"
+        env["YAY_AUTO_REVIEW_LANG"] = "en"
         self.assertEqual(i18n.resolve_language("zh_CN", environ=env), "en")
         self.assertEqual(i18n.resolve_language("en", override="zh_CN", environ=env), "zh_CN")
-        env["AUR_AUTO_REVIEW_LANG"] = "auto"
+        env["YAY_AUTO_REVIEW_LANG"] = "auto"
         self.assertEqual(i18n.resolve_language("zh_CN", environ=env), "zh_CN")
-        env["AUR_AUTO_REVIEW_LANG"] = "fr_FR"
+        env["YAY_AUTO_REVIEW_LANG"] = "fr_FR"
         self.assertEqual(i18n.resolve_language("zh_CN", environ=env), "en")
 
     def test_locale_aliases_and_unsupported_fallback(self):
@@ -62,7 +62,7 @@ class LocaleResolutionTests(unittest.TestCase):
             self.assertEqual(i18n.t("Codex returned an invalid {}", "summary"), "Codex 返回了无效的 summary")
 
     def test_chinese_catalog_covers_all_literal_python_messages(self):
-        root = Path(__file__).resolve().parents[1] / "aur_auto_review"
+        root = Path(__file__).resolve().parents[1] / "yay_auto_review"
         catalog = i18n._catalog("zh_CN")
         messages = set(cli.LABELS.values())
         for path in (root / "core.py", root / "cli.py", root / "installer.py"):
@@ -81,12 +81,12 @@ class ConfigAndCliLanguageTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.config = self.root / "config" / "aur-auto-review" / "config.toml"
+        self.config = self.root / "config" / "yay-auto-review" / "config.toml"
         self.config.parent.mkdir(parents=True)
         environment = mock.patch.dict(os.environ, {
             "XDG_CONFIG_HOME": str(self.root / "config"),
             "XDG_CACHE_HOME": str(self.root / "cache"),
-            "LANG": "en_US.UTF-8", "LC_ALL": "", "LC_MESSAGES": "", "AUR_AUTO_REVIEW_LANG": "",
+            "LANG": "en_US.UTF-8", "LC_ALL": "", "LC_MESSAGES": "", "YAY_AUTO_REVIEW_LANG": "",
         })
         environment.start()
         self.addCleanup(environment.stop)
@@ -117,7 +117,7 @@ class ConfigAndCliLanguageTests(unittest.TestCase):
             code, _, error = self.invoke(["session"])
             self.assertEqual(code, 1)
             self.assertIn("language must be", error)
-            self.assertFalse((self.root / "cache" / "aur-auto-review" / "builds").exists())
+            self.assertFalse((self.root / "cache" / "yay-auto-review" / "builds").exists())
 
     def test_config_and_locale_translate_help_and_standard_argparse_text(self):
         self.config.write_text('language = "zh_CN"\n', encoding="utf-8")
@@ -133,7 +133,7 @@ class ConfigAndCliLanguageTests(unittest.TestCase):
 
     def test_cli_overrides_environment_before_or_after_subcommand(self):
         self.config.write_text('language = "zh_CN"\n', encoding="utf-8")
-        with mock.patch.dict(os.environ, {"AUR_AUTO_REVIEW_LANG": "zh_CN"}):
+        with mock.patch.dict(os.environ, {"YAY_AUTO_REVIEW_LANG": "zh_CN"}):
             for args in (["--lang", "en", "--help"], ["review", "--lang", "en", "--help"]):
                 code, output, error = self.invoke(args)
                 self.assertEqual(code, 0, error)

@@ -22,12 +22,12 @@ from .core import ReviewConfig, Reviewer, SnapshotError, snapshot_package
 from .i18n import (SUPPORTED_LANGUAGES, get_language, localized_argparse,
                    resolve_language, set_language, t, use_language)
 
-SESSION_ENV = "AUR_AUTO_REVIEW_SESSION"
+SESSION_ENV = "YAY_AUTO_REVIEW_SESSION"
 LABELS = {"green": 'Green', "white": 'White', "yellow": 'Yellow', "red": 'Red'}
 COLORS = {"green": "32", "white": "37", "yellow": "33", "red": "31"}
 NAME = re.compile(r"[a-z0-9][a-z0-9@._+\-]*\Z")
 SESSION = re.compile(r"[0-9a-f]{32}\Z")
-_language_override: ContextVar[str | None] = ContextVar("aur_cli_language", default=None)
+_language_override: ContextVar[str | None] = ContextVar("yay_auto_review_cli_language", default=None)
 
 
 class GateError(Exception):
@@ -46,7 +46,7 @@ def default_cache() -> Path:
     path = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")))
     if not path.is_absolute():
         raise GateError(t('XDG_CACHE_HOME must be an absolute path'))
-    return path / "aur-auto-review"
+    return path / "yay-auto-review"
 
 
 def private_dir(path: Path) -> Path:
@@ -61,7 +61,7 @@ def config_data() -> dict:
     root = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
     if not root.is_absolute():
         raise GateError(t('XDG_CONFIG_HOME must be an absolute path'))
-    path = root / "aur-auto-review" / "config.toml"
+    path = root / "yay-auto-review" / "config.toml"
     try:
         return tomllib.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     except tomllib.TOMLDecodeError as exc:
@@ -319,7 +319,7 @@ def makepkg_gate(argv: list[str]) -> int:
             raise GateError(t('Files changed during the repeated review; stopped'))
     write_receipt(snapshot, session, receipt["context"], started=True)
     executable = shutil.which(makepkg)
-    if not executable or Path(executable).resolve() == Path(sys.argv[0]).resolve() or Path(executable).name == "aur-auto-review-makepkg":
+    if not executable or Path(executable).resolve() == Path(sys.argv[0]).resolve() or Path(executable).name == "yay-auto-review-makepkg":
         raise GateError(t('Invalid makepkg configuration or recursive reference to the review plugin'))
     # makepkg applies these variable assignments AFTER makepkg.conf and any
     # user assignments. Keep both downloads and archives in this transaction:

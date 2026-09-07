@@ -1,5 +1,5 @@
 -- Native yay >= 13.0.0 integration. Load from ~/.config/yay/init.lua:
---   require("aur-auto-review")
+--   require("yay-auto-review")
 --
 -- AURPreInstall runs after dependency resolution and Git checkout, before
 -- clean/diff/edit menus and the first makepkg --verifysource invocation.
@@ -8,7 +8,7 @@
 -- Match Python's environment/locale selection even if the helper is missing.
 -- After session creation the helper supplies the selected config language.
 local function selected_language()
-    local override = os.getenv("AUR_AUTO_REVIEW_LANG")
+    local override = os.getenv("YAY_AUTO_REVIEW_LANG")
     if override and (override == "" or override:lower() == "auto") then override = nil end
     local value = override
     if not value then
@@ -25,14 +25,14 @@ end
 
 local language = selected_language()
 local messages = {
-    ["aur-auto-review requires yay >= 13.0.0 with native Lua hooks"] = "aur-auto-review 需要支持原生 Lua 钩子的 yay >= 13.0.0",
+    ["yay-auto-review requires yay >= 13.0.0 with native Lua hooks"] = "yay-auto-review 需要支持原生 Lua 钩子的 yay >= 13.0.0",
     ["invalid %s in AURPreInstall event"] = "AURPreInstall 事件中的 %s 无效",
     ["cannot inspect yay command-line overrides"] = "无法检查 yay 命令行覆盖参数",
     ["cannot read yay command-line overrides"] = "无法读取 yay 命令行覆盖参数",
     ["unsupported override while review is enabled: %s"] = "启用审查时不支持覆盖参数：%s",
     ["this yay Lua runtime does not provide os.setenv"] = "此 yay Lua 运行环境未提供 os.setenv",
     ["XDG_CACHE_HOME must be an absolute path"] = "XDG_CACHE_HOME 必须是绝对路径",
-    ["cannot create a review session; check aur-auto-review is on PATH"] = "无法创建审查会话；请确认 aur-auto-review 位于 PATH 中",
+    ["cannot create a review session; check yay-auto-review is on PATH"] = "无法创建审查会话；请确认 yay-auto-review 位于 PATH 中",
     ["review session helper failed"] = "审查会话辅助程序执行失败",
     ["review session helper returned an invalid session"] = "审查会话辅助程序返回了无效会话",
     ["cannot set review session environment"] = "无法设置审查会话环境变量",
@@ -57,18 +57,18 @@ if type(yay) ~= "table"
     or type(yay.create_autocmd) ~= "function"
     or type(yay.abort) ~= "function"
     or type(yay.opt) ~= "table" then
-    error(t("aur-auto-review requires yay >= 13.0.0 with native Lua hooks"))
+    error(t("yay-auto-review requires yay >= 13.0.0 with native Lua hooks"))
 end
 
-local command = "aur-auto-review"
-local guard = "aur-auto-review-makepkg"
+local command = "yay-auto-review"
+local guard = "yay-auto-review-makepkg"
 
 local function abort(message)
     message = t(message)
-    yay.abort("aur-auto-review: " .. message)
+    yay.abort("yay-auto-review: " .. message)
     -- A real yay.abort raises a controlled error. Fail closed even if a
     -- caller replaces that function with one that unexpectedly returns.
-    error("aur-auto-review: " .. message)
+    error("yay-auto-review: " .. message)
 end
 
 local function checked_string(value, name)
@@ -138,7 +138,7 @@ end
 -- into it. No package code is read or executed during session creation.
 local pipe = io.popen(shell_quote(command) .. " 'session'", "r")
 if not pipe then
-    abort("cannot create a review session; check aur-auto-review is on PATH")
+    abort("cannot create a review session; check yay-auto-review is on PATH")
 end
 local output = pipe:read("*a")
 local closed, close_reason, close_code = pipe:close()
@@ -152,10 +152,10 @@ local session = type(output) == "string" and output:match("^([0-9a-f]+)\n?$")
 if not session or #session ~= 32 then
     abort("review session helper returned an invalid session")
 end
-if not os.setenv("AUR_AUTO_REVIEW_SESSION", session) then
+if not os.setenv("YAY_AUTO_REVIEW_SESSION", session) then
     abort("cannot set review session environment")
 end
-local build_dir = cache_home:gsub("/+$", "") .. "/aur-auto-review/builds/" .. session
+local build_dir = cache_home:gsub("/+$", "") .. "/yay-auto-review/builds/" .. session
 local language_file = io.open(build_dir .. "/.language", "r")
 if language_file then
     local selected = language_file:read("*l")
@@ -179,7 +179,7 @@ yay.create_autocmd("AURPreInstall", {
         -- validates the running yay command line before issuing approval.
         if yay.opt.makepkg_bin ~= guard or yay.opt.redownload ~= "all"
             or yay.opt.build_dir ~= build_dir
-            or os.getenv("AUR_AUTO_REVIEW_SESSION") ~= session then
+            or os.getenv("YAY_AUTO_REVIEW_SESSION") ~= session then
             abort("the review session, build_dir, makepkg guard or redownload setting was overwritten")
         end
         if type(event) ~= "table" or type(event.data) ~= "table" then

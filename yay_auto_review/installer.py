@@ -14,8 +14,8 @@ import time
 from .cli import GateError
 from .i18n import t
 
-BEGIN = "-- BEGIN aur-auto-review (managed)"
-END = "-- END aur-auto-review (managed)"
+BEGIN = "-- BEGIN yay-auto-review (managed)"
+END = "-- END yay-auto-review (managed)"
 
 
 def _check_runtime() -> None:
@@ -55,7 +55,7 @@ def _write_configuration(init: Path, before: str, after: str) -> None:
 
 def _enable(init: Path, before: str, shared_plugin: Path) -> None:
     init.parent.mkdir(parents=True, exist_ok=True)
-    plugin_dest = init.parent / "aur-auto-review.lua"
+    plugin_dest = init.parent / "yay-auto-review.lua"
     # Keep only a loader in the home directory, so package upgrades update Lua.
     plugin_dest.write_text(
         "-- Managed loader; the shared plugin is updated by your package manager.\n"
@@ -77,13 +77,13 @@ def enable(prefix: Path | None = None) -> None:
     source = Path(__file__).resolve().parent
     if prefix is None:
         prefix = (source.parents[3]
-                  if source.parent.name == "python" and source.parent.parent.name == "aur-auto-review"
+                  if source.parent.name == "python" and source.parent.parent.name == "yay-auto-review"
                   and source.parents[2].name == "share" else Path(sys.prefix))
     prefix = prefix.expanduser().absolute()
-    plugin = prefix / "share" / "aur-auto-review" / "aur-auto-review.lua"
+    plugin = prefix / "share" / "yay-auto-review" / "yay-auto-review.lua"
     if not plugin.is_file():
         raise GateError(t("Shared Lua plugin not found at {path}; install yay-auto-review first", path=plugin))
-    for name in ("aur-auto-review", "aur-auto-review-makepkg"):
+    for name in ("yay-auto-review", "yay-auto-review-makepkg"):
         if not os.access(prefix / "bin" / name, os.X_OK):
             raise GateError(t("Required launcher is missing: {path}", path=prefix / "bin" / name))
     _check_runtime()
@@ -106,35 +106,35 @@ def install(prefix: Path) -> None:
     prefix = prefix.expanduser().absolute()
     source = Path(__file__).resolve().parent
     root = source.parent
-    plugin = root / "lua" / "aur-auto-review.lua"
+    plugin = root / "lua" / "yay-auto-review.lua"
     if not plugin.is_file():
         raise GateError(t("Run ./install.sh from the source checkout; for a packaged install, run yay-auto-review enable"))
     _check_runtime()
     init, before = _configuration()
-    shared = prefix / "share" / "aur-auto-review"
-    library = shared / "python" / "aur_auto_review"
+    shared = prefix / "share" / "yay-auto-review"
+    library = shared / "python" / "yay_auto_review"
     binaries = prefix / "bin"
     library.mkdir(parents=True, exist_ok=True)
     binaries.mkdir(parents=True, exist_ok=True)
     for path in source.glob("*.py"):
         shutil.copy2(path, library / path.name)
     shutil.copytree(source / "locales", library / "locales", dirs_exist_ok=True)
-    for name, function in (("yay-auto-review", "main"), ("aur-auto-review", "main"),
-                           ("aur-auto-review-makepkg", "makepkg_main")):
+    for name, function in (("yay-auto-review", "main"),
+                           ("yay-auto-review-makepkg", "makepkg_main")):
         # -I excludes the checkout and PYTHONPATH from module discovery.
         script = (f"#!{sys.executable} -I\n"
                   f"import sys\nsys.path.insert(0, {str(library.parent)!r})\n"
-                  f"from aur_auto_review.cli import {function}\n"
+                  f"from yay_auto_review.cli import {function}\n"
                   f"raise SystemExit({function}())\n")
         dest = binaries / name
         dest.write_text(script, encoding="utf-8")
         dest.chmod(0o755)
     lua = plugin.read_text(encoding="utf-8")
-    lua = lua.replace('local command = "aur-auto-review"',
-                      "local command = " + json.dumps(str(binaries / "aur-auto-review"), ensure_ascii=False))
-    lua = lua.replace('local guard = "aur-auto-review-makepkg"',
-                      "local guard = " + json.dumps(str(binaries / "aur-auto-review-makepkg"), ensure_ascii=False))
-    plugin_dest = shared / "aur-auto-review.lua"
+    lua = lua.replace('local command = "yay-auto-review"',
+                      "local command = " + json.dumps(str(binaries / "yay-auto-review"), ensure_ascii=False))
+    lua = lua.replace('local guard = "yay-auto-review-makepkg"',
+                      "local guard = " + json.dumps(str(binaries / "yay-auto-review-makepkg"), ensure_ascii=False))
+    plugin_dest = shared / "yay-auto-review.lua"
     plugin_dest.write_text(lua, encoding="utf-8")
     shutil.copy2(root / "config.example.toml", shared / "config.example.toml")
     print(t("Programs installed to {path}", path=binaries))

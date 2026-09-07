@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yay-auto-review"
-version = "0.2.0"
+version = "0.3.0"
 description = "Review AUR package recipes with Codex before yay builds them"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,16 +13,15 @@ license-files = ["LICENSE"]
 dependencies = []
 
 [project.scripts]
-yay-auto-review = "aur_auto_review.cli:main"
-aur-auto-review = "aur_auto_review.cli:main"
-aur-auto-review-makepkg = "aur_auto_review.cli:makepkg_main"
+yay-auto-review = "yay_auto_review.cli:main"
+yay-auto-review-makepkg = "yay_auto_review.cli:makepkg_main"
 
 [tool.setuptools]
-packages = ["aur_auto_review"]
+packages = ["yay_auto_review"]
 include-package-data = false
 
 [tool.setuptools.package-data]
-aur_auto_review = ["locales/*.json"]
+yay_auto_review = ["locales/*.json"]
 
 [tool.setuptools.data-files]
-"share/aur-auto-review" = ["lua/aur-auto-review.lua", "config.example.toml"]
+"share/yay-auto-review" = ["lua/yay-auto-review.lua", "config.example.toml"]

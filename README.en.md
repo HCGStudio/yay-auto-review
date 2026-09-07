@@ -35,9 +35,7 @@ plugin so upgrades take effect automatically.
 If a source installation already provides the same command in `~/.local/bin`,
 use `/usr/bin/yay-auto-review enable` to activate the system package explicitly.
 
-The original `aur-auto-review` command remains an alias. Existing configuration
-and cache paths keep their `aur-auto-review` names. See
-[AUR packaging](packaging/aur/README.md) for build and maintenance details.
+See [AUR packaging](packaging/aur/README.md) for build and maintenance details.
 
 ## Install from source
 
@@ -57,7 +55,7 @@ checkout cannot inject Python modules through the current directory or PYTHONPAT
 English (`en`) and Simplified Chinese (`zh_CN`) are supported. Selection order:
 
 1. `--lang` on the command line.
-2. `AUR_AUTO_REVIEW_LANG`.
+2. `YAY_AUTO_REVIEW_LANG`.
 3. `language` in the configuration file.
 4. `LC_ALL`, then `LC_MESSAGES`, then `LANG`.
 5. English for `C`, `POSIX`, or unsupported locales.
@@ -65,10 +63,10 @@ English (`en`) and Simplified Chinese (`zh_CN`) are supported. Selection order:
 ```sh
 yay-auto-review --lang en --help
 yay-auto-review --lang zh_CN review /path/to/package --pkgbase package
-AUR_AUTO_REVIEW_LANG=en yay -Syu
+YAY_AUTO_REVIEW_LANG=en yay -Syu
 ```
 
-Create `~/.config/aur-auto-review/config.toml` (or the corresponding
+Create `~/.config/yay-auto-review/config.toml` (or the corresponding
 `XDG_CONFIG_HOME` path) to configure persistent preferences:
 
 ```toml
@@ -81,7 +79,7 @@ makepkg = "/usr/bin/makepkg"
 
 Interface messages and Codex reports use the selected language. Cached reports
 are separated by language. JSON level identifiers remain stable and untranslated.
-Translations are UTF-8 JSON catalogs in `aur_auto_review/locales/`; English
+Translations are UTF-8 JSON catalogs in `yay_auto_review/locales/`; English
 messages are their keys. Missing or incompatible translations fall back to English.
 
 ## Cache and approval
@@ -121,7 +119,7 @@ execution tools, existing login credentials, and live source verification.
 Personal Codex configuration is not loaded.
 
 Caches and retained build directories are under
-`${XDG_CACHE_HOME:-~/.cache}/aur-auto-review/`. After a yay transaction has exited,
+`${XDG_CACHE_HOME:-~/.cache}/yay-auto-review/`. After a yay transaction has exited,
 its `builds/<session>` and `receipts/<session>` directories may be removed to
 recover disk space.
 
@@ -140,5 +138,5 @@ metadata commands. They do not install packages or call a real model.
 
 ## License
 
-Copyright (c) 2026 aur-auto-review contributors.
+Copyright (c) 2026 yay-auto-review contributors.
 Licensed under [GPL-3.0-only](LICENSE).

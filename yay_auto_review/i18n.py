@@ -18,7 +18,7 @@ from typing import Iterator, Mapping
 
 SUPPORTED_LANGUAGES = ("en", "zh_CN")
 LANGUAGE_NAMES = {"en": "English", "zh_CN": "Simplified Chinese"}
-_active_language: ContextVar[str | None] = ContextVar("aur_review_language", default=None)
+_active_language: ContextVar[str | None] = ContextVar("yay_auto_review_language", default=None)
 
 
 def normalize_language(value: str | None) -> str | None:
@@ -41,7 +41,7 @@ def resolve_language(language: str = "auto", *, override: str | None = None,
     lower-priority variable. In particular LC_ALL=C must override LANG=zh_CN.
     """
     env = os.environ if environ is None else environ
-    for value in (override, env.get("AUR_AUTO_REVIEW_LANG"), language):
+    for value in (override, env.get("YAY_AUTO_REVIEW_LANG"), language):
         if value and value.lower() != "auto":
             return normalize_language(value) or "en"
     for key in ("LC_ALL", "LC_MESSAGES", "LANG"):

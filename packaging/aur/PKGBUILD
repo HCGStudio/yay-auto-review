@@ -23,7 +23,7 @@ build() {
 
 check() {
   cd "$pkgname-$pkgver"
-  LC_ALL=C.UTF-8 AUR_AUTO_REVIEW_LANG=en python -m unittest discover -s tests -v
+  LC_ALL=C.UTF-8 YAY_AUTO_REVIEW_LANG=en python -m unittest discover -s tests -v
 }
 
 package() {
@@ -33,13 +33,13 @@ package() {
   # AUR build directories and PYTHONPATH must never supply Python modules to
   # the reviewer or makepkg guard, including before per-user enablement.
   local command
-  for command in yay-auto-review aur-auto-review aur-auto-review-makepkg; do
+  for command in yay-auto-review yay-auto-review-makepkg; do
     sed -i '1c#!/usr/bin/python -I' "$pkgdir/usr/bin/$command"
   done
   sed -i \
-    -e 's@local command = "aur-auto-review"@local command = "/usr/bin/aur-auto-review"@' \
-    -e 's@local guard = "aur-auto-review-makepkg"@local guard = "/usr/bin/aur-auto-review-makepkg"@' \
-    "$pkgdir/usr/share/aur-auto-review/aur-auto-review.lua"
+    -e 's@local command = "yay-auto-review"@local command = "/usr/bin/yay-auto-review"@' \
+    -e 's@local guard = "yay-auto-review-makepkg"@local guard = "/usr/bin/yay-auto-review-makepkg"@' \
+    "$pkgdir/usr/share/yay-auto-review/yay-auto-review.lua"
 
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
   install -Dm644 README.en.md "$pkgdir/usr/share/doc/$pkgname/README.en.md"

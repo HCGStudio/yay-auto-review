@@ -18,13 +18,13 @@ yay -Syu
 
 Run `enable` as your regular user. The pacman installation only installs system
 files and prints activation instructions; each user enables the plugin in their
-own yay configuration. The existing `aur-auto-review` command remains available.
+own yay configuration.
 `yay-auto-review disable` removes the managed yay integration.
 
 The installed launchers use Python's `-I` isolation flag. The wheel includes
-translation resources. The Lua plugin under `/usr/share/aur-auto-review/` uses
+translation resources. The Lua plugin under `/usr/share/yay-auto-review/` uses
 absolute system launcher paths so old per-user installs do not shadow it.
-Language selection uses `AUR_AUTO_REVIEW_LANG=en` / `zh_CN` / `auto`, or the
+Language selection uses `YAY_AUTO_REVIEW_LANG=en` / `zh_CN` / `auto`, or the
 standard locale environment when set to `auto`.
 
 ## Build and verify

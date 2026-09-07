@@ -13,7 +13,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from aur_auto_review import cli, core
+from yay_auto_review import cli, core
 
 
 class GateTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class GateTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         environment = mock.patch.dict(os.environ, {
-            "AUR_AUTO_REVIEW_LANG": "zh_CN",
+            "YAY_AUTO_REVIEW_LANG": "zh_CN",
             "XDG_CACHE_HOME": str(self.root / "cache"),
             "XDG_CONFIG_HOME": str(self.root / "config"),
         })

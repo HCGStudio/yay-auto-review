@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from aur_auto_review import cli, installer
+from yay_auto_review import cli, installer
 
 
 class InstallerTests(unittest.TestCase):
@@ -62,14 +62,16 @@ class InstallerTests(unittest.TestCase):
         self.install()
         self.assertTrue(self.init.is_file())
         self.assertEqual(list(self.init.parent.glob("init.lua.bak.*")), [])
-        for name in ("yay-auto-review", "aur-auto-review", "aur-auto-review-makepkg"):
+        self.assertEqual({path.name for path in (self.prefix / "bin").iterdir()},
+                         {"yay-auto-review", "yay-auto-review-makepkg"})
+        for name in ("yay-auto-review", "yay-auto-review-makepkg"):
             self.assertTrue(os.access(self.prefix / "bin" / name, os.X_OK))
-        shared_plugin = self.prefix / "share" / "aur-auto-review" / "aur-auto-review.lua"
-        loader = (self.init.parent / "aur-auto-review.lua").read_text(encoding="utf-8")
+        shared_plugin = self.prefix / "share" / "yay-auto-review" / "yay-auto-review.lua"
+        loader = (self.init.parent / "yay-auto-review.lua").read_text(encoding="utf-8")
         self.assertIn(str(shared_plugin), loader)
         plugin = shared_plugin.read_text(encoding="utf-8")
-        self.assertIn(str(self.prefix / "bin" / "aur-auto-review"), plugin)
-        self.assertIn(str(self.prefix / "bin" / "aur-auto-review-makepkg"), plugin)
+        self.assertIn(str(self.prefix / "bin" / "yay-auto-review"), plugin)
+        self.assertIn(str(self.prefix / "bin" / "yay-auto-review-makepkg"), plugin)
 
     def test_reinstall_preserves_unrelated_settings_after_managed_block(self):
         self.install()
@@ -113,15 +115,15 @@ class InstallerTests(unittest.TestCase):
         malicious = f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\nraise RuntimeError('package injected')\n"
         (checkout / "sitecustomize.py").write_text(malicious)
         (checkout / "usercustomize.py").write_text(malicious)
-        package = checkout / "aur_auto_review"
+        package = checkout / "yay_auto_review"
         package.mkdir()
         (package / "__init__.py").write_text(malicious)
         (package / "cli.py").write_text(malicious)
         environment = dict(os.environ, PYTHONPATH=str(checkout), PYTHONSTARTUP=str(checkout / "sitecustomize.py"))
         environment.pop(cli.SESSION_ENV, None)
         for name, arguments, expected in (
-            ("aur-auto-review", ["--help"], 0),
-            ("aur-auto-review-makepkg", ["--verifysource"], 1),
+            ("yay-auto-review", ["--help"], 0),
+            ("yay-auto-review-makepkg", ["--verifysource"], 1),
         ):
             with self.subTest(launcher=name):
                 launcher = self.prefix / "bin" / name
@@ -155,8 +157,8 @@ class InstallerTests(unittest.TestCase):
 
     def test_enable_uses_shared_plugin_without_copying_its_version(self):
         self.install()
-        shared = self.prefix / 'share' / 'aur-auto-review' / 'aur-auto-review.lua'
-        loader = self.init.parent / 'aur-auto-review.lua'
+        shared = self.prefix / 'share' / 'yay-auto-review' / 'yay-auto-review.lua'
+        loader = self.init.parent / 'yay-auto-review.lua'
         original_loader = loader.read_text()
         with shared.open('a') as stream:
             stream.write('\n-- package manager update\n')
@@ -166,9 +168,9 @@ class InstallerTests(unittest.TestCase):
         self.assertNotIn('package manager update', loader.read_text())
         self.assertIn(str(shared), loader.read_text())
 
-    def test_locales_are_copied_and_installed_alias_supports_both_languages(self):
+    def test_locales_are_copied_and_installed_launcher_supports_both_languages(self):
         self.install()
-        locale_file = self.prefix / 'share' / 'aur-auto-review' / 'python' / 'aur_auto_review' / 'locales' / 'zh_CN.json'
+        locale_file = self.prefix / 'share' / 'yay-auto-review' / 'python' / 'yay_auto_review' / 'locales' / 'zh_CN.json'
         self.assertTrue(locale_file.is_file())
         for language, expected in (('en', 'Review AUR packages with Codex'), ('zh_CN', 'Codex')):
             with self.subTest(language=language):
@@ -189,25 +191,25 @@ class InstallerTests(unittest.TestCase):
             installer.enable(self.prefix)
         self.assertEqual(self.init.read_bytes(), before)
 
-    def test_installed_source_alias_detects_prefix_when_reenabling(self):
+    def test_installed_source_launcher_detects_prefix_when_reenabling(self):
         self.install()
-        alias = self.prefix / 'bin' / 'yay-auto-review'
+        launcher = self.prefix / 'bin' / 'yay-auto-review'
         for command in ('disable', 'enable'):
-            process = subprocess.run([str(alias), command], capture_output=True,
+            process = subprocess.run([str(launcher), command], capture_output=True,
                                      text=True, timeout=10)
             self.assertEqual(process.returncode, 0, process.stderr)
         self.assertIn(installer.BEGIN, self.init.read_text())
-        self.assertIn(str(self.prefix / 'share' / 'aur-auto-review' / 'aur-auto-review.lua'),
-                      (self.init.parent / 'aur-auto-review.lua').read_text())
+        self.assertIn(str(self.prefix / 'share' / 'yay-auto-review' / 'yay-auto-review.lua'),
+                      (self.init.parent / 'yay-auto-review.lua').read_text())
 
     def test_installed_session_helper_creates_private_directory_and_prints_only_token(self):
         self.install()
-        process = subprocess.run([str(self.prefix / "bin" / "aur-auto-review"), "session"],
+        process = subprocess.run([str(self.prefix / "bin" / "yay-auto-review"), "session"],
                                  capture_output=True, text=True, timeout=10)
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertRegex(process.stdout, r"\A[0-9a-f]{32}\n\Z")
         token = process.stdout.strip()
-        directory = self.cache / "aur-auto-review" / "builds" / token
+        directory = self.cache / "yay-auto-review" / "builds" / token
         self.assertTrue(directory.is_dir())
         self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
         self.assertEqual(process.stderr, "")
