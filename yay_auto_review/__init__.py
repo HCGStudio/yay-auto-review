@@ -1,3 +1,3 @@
 """Review AUR package sources before allowing yay to build them."""
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"

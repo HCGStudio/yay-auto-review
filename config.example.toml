@@ -1,10 +1,8 @@
 # ~/.config/yay-auto-review/config.toml
 # Codex CLI must already be logged in (codex login).
-# UI and Codex report language: en (default), zh_CN or auto.
-# Priority: --lang > YAY_AUTO_REVIEW_LANG > language.
-# Explicit auto uses LC_ALL > LC_MESSAGES > LANG; otherwise ignore system locale.
-# C/POSIX and unsupported locales use English. Language changes invalidate cache.
-language = "en"
+# UI and Codex report language is read once from LANG at startup.
+# Simplified Chinese locales use Chinese; other unsupported or unset locales
+# fall back to English. Language is not a configuration option.
 codex = "codex"
 # Unset uses the Codex CLI default model. User config is not loaded.
 # model = "your-model-id"

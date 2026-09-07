@@ -58,7 +58,7 @@ class LuaHookTests(unittest.TestCase):
         """ + body
         return subprocess.run(
             [LUA, "-"], input=harness, text=True, errors="replace", capture_output=True,
-            env=dict(os.environ, YAY_AUTO_REVIEW_LANG="en") if env is None else env, timeout=10,
+            env=dict(os.environ, LANG="en_US.UTF-8") if env is None else env, timeout=10,
         )
 
     def test_approvals_accept_only_explicit_success(self):
@@ -113,32 +113,60 @@ class LuaHookTests(unittest.TestCase):
             self.assertNotEqual(process.returncode, 0)
             self.assertIn("ABORT:", process.stderr)
 
-    def test_lua_defaults_to_english_and_explicit_auto_follows_posix_precedence(self):
+    def test_lua_uses_only_startup_lang_with_english_fallback(self):
         cases = [
-            ({"YAY_AUTO_REVIEW_LANG": "zh_CN", "LC_ALL": "C"}, "缺少 AURPreInstall"),
-            ({"YAY_AUTO_REVIEW_LANG": "", "LC_ALL": "C", "LANG": "zh_CN"}, "missing AURPreInstall"),
-            ({"YAY_AUTO_REVIEW_LANG": "", "LC_ALL": "zh_CN", "LANG": "zh_CN"}, "missing AURPreInstall"),
-            ({"YAY_AUTO_REVIEW_LANG": "", "LC_ALL": "", "LC_MESSAGES": "zh_CN", "LANG": "en"}, "missing AURPreInstall"),
-            ({"YAY_AUTO_REVIEW_LANG": "auto", "LC_ALL": "", "LC_MESSAGES": "zh_CN", "LANG": "en"}, "缺少 AURPreInstall"),
-            ({"YAY_AUTO_REVIEW_LANG": "auto", "LC_ALL": "C", "LANG": "zh_CN"}, "missing AURPreInstall"),
-            ({"YAY_AUTO_REVIEW_LANG": "fr", "LC_ALL": "zh_CN"}, "missing AURPreInstall"),
+            ({}, "missing AURPreInstall"),
+            ({"LANG": ""}, "missing AURPreInstall"),
+            ({"LANG": "C"}, "missing AURPreInstall"),
+            ({"LANG": "POSIX"}, "missing AURPreInstall"),
+            ({"LANG": "fr_FR.UTF-8"}, "missing AURPreInstall"),
+            ({"LANG": "zh_CN.UTF-8", "LC_ALL": "C", "YAY_AUTO_REVIEW_LANG": "en"}, "缺少 AURPreInstall"),
+            ({"LANG": "zh-Hans-CN.UTF-8@variant"}, "缺少 AURPreInstall"),
+            ({"LANG": "zh_SG"}, "缺少 AURPreInstall"),
+            ({"LANG": "en", "LC_ALL": "zh_CN", "LC_MESSAGES": "zh_CN", "YAY_AUTO_REVIEW_LANG": "zh_CN"}, "missing AURPreInstall"),
+            ({"LC_ALL": "zh_CN", "LC_MESSAGES": "zh_CN", "YAY_AUTO_REVIEW_LANG": "zh_CN"}, "missing AURPreInstall"),
         ]
+        environment = {key: value for key, value in os.environ.items()
+                       if key not in {"LANG", "LC_ALL", "LC_MESSAGES", "YAY_AUTO_REVIEW_LANG"}}
         for variables, message in cases:
             with self.subTest(variables=variables):
-                process = self.run_hook("callback(nil)", env=dict(os.environ, **variables))
+                process = self.run_hook("callback(nil)", env=dict(environment, **variables))
                 self.assertNotEqual(process.returncode, 0)
                 self.assertIn(message, process.stderr)
 
-    def test_lua_uses_language_selected_by_session_helper(self):
+    def test_lua_reads_lang_once_and_ignores_later_environment_changes(self):
+        setup = """
+            local getenv = os.getenv
+            local lang_reads = 0
+            os.getenv = function(key)
+                if key == 'LANG' then
+                    lang_reads = lang_reads + 1
+                    assert(lang_reads == 1, 'LANG WAS READ AGAIN')
+                end
+                return getenv(key)
+            end
+        """
+        for initial, later, message in (("en", "zh_CN", "missing AURPreInstall"),
+                                        ("zh_CN", "en", "缺少 AURPreInstall")):
+            with self.subTest(initial=initial):
+                process = self.run_hook(
+                    "assert(lang_reads == 1)\nos.setenv('LANG', " + lua_string(later) + ")\ncallback(nil)",
+                    env=dict(os.environ, LANG=initial), setup=setup,
+                )
+                self.assertNotEqual(process.returncode, 0)
+                self.assertIn(message, process.stderr)
+                self.assertNotIn("LANG WAS READ AGAIN", process.stderr)
+
+    def test_lua_ignores_legacy_session_language_file(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary) / "yay-auto-review" / "builds" / ("a" * 32)
             directory.mkdir(parents=True)
             (directory / ".language").write_text("zh_CN\n", encoding="ascii")
             process = self.run_hook("callback(nil)", env=dict(
-                os.environ, YAY_AUTO_REVIEW_LANG="en", XDG_CACHE_HOME=temporary,
+                os.environ, LANG="en", XDG_CACHE_HOME=temporary,
             ))
             self.assertNotEqual(process.returncode, 0)
-            self.assertIn("缺少 AURPreInstall", process.stderr)
+            self.assertIn("missing AURPreInstall", process.stderr)
 
     def test_corrupt_metadata_aborts_before_shell(self):
         cases = [
@@ -233,7 +261,7 @@ class NativeYayConfigTests(unittest.TestCase):
             )
             result = subprocess.run(
                 ["yay", "-Pg"], text=True, capture_output=True, timeout=10,
-                env=dict(os.environ, YAY_AUTO_REVIEW_LANG="en", XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp,
+                env=dict(os.environ, LANG="en_US.UTF-8", XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp,
                          PATH=str(binary_dir) + os.pathsep + os.environ["PATH"]),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -262,7 +290,7 @@ class NativeYayConfigTests(unittest.TestCase):
                 with self.subTest(argument=argument):
                     result = subprocess.run(
                         ["yay", "-Pg", argument], text=True, capture_output=True, timeout=10,
-                        env=dict(os.environ, YAY_AUTO_REVIEW_LANG="en", XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp),
+                        env=dict(os.environ, LANG="en_US.UTF-8", XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp),
                     )
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("unsupported override", result.stderr)

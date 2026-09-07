@@ -5,17 +5,10 @@
 -- clean/diff/edit menus and the first makepkg --verifysource invocation.
 -- The makepkg guard checks the approved files again after those menus.
 
--- Default to English; only explicit auto opts into the system locale.
--- After session creation the helper supplies the selected config language.
+-- Read LANG once when the plugin loads; keep this language for its lifetime.
+-- Missing and unsupported locales fall back to English.
 local function selected_language()
-    local value = os.getenv("YAY_AUTO_REVIEW_LANG")
-    if value and value:lower() == "auto" then
-        value = nil
-        for _, key in ipairs({"LC_ALL", "LC_MESSAGES", "LANG"}) do
-            local candidate = os.getenv(key)
-            if candidate and candidate ~= "" then value = candidate; break end
-        end
-    end
+    local value = os.getenv("LANG")
     value = (value or "en"):lower():gsub("%-", "_"):gsub("[.@].*$", "")
     if value == "zh" or value == "zh_cn" or value == "zh_sg"
         or value == "zh_hans" or value:match("^zh_hans_") then return "zh_CN" end
@@ -155,12 +148,6 @@ if not os.setenv("YAY_AUTO_REVIEW_SESSION", session) then
     abort("cannot set review session environment")
 end
 local build_dir = cache_home:gsub("/+$", "") .. "/yay-auto-review/builds/" .. session
-local language_file = io.open(build_dir .. "/.language", "r")
-if language_file then
-    local selected = language_file:read("*l")
-    language_file:close()
-    if selected == "en" or selected == "zh_CN" then language = selected end
-end
 
 -- Fresh checkouts prevent stale, unreviewed build products from being reused.
 -- Review results remain in a separate persistent cache across transactions.

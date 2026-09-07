@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from contextvars import ContextVar
 import dataclasses
 import hashlib
 import json
@@ -19,14 +18,12 @@ import time
 import tomllib
 
 from .core import ReviewConfig, Reviewer, SnapshotError, snapshot_package
-from .i18n import (SUPPORTED_LANGUAGES, get_language, localized_argparse,
-                   resolve_language, set_language, t, use_language)
+from .i18n import localized_argparse, t
 
 SESSION_ENV = "YAY_AUTO_REVIEW_SESSION"
 COLORS = {"green": "32", "white": "37", "yellow": "33", "red": "31"}
 NAME = re.compile(r"[a-z0-9][a-z0-9@._+\-]*\Z")
 SESSION = re.compile(r"[0-9a-f]{32}\Z")
-_language_override: ContextVar[str | None] = ContextVar("yay_auto_review_cli_language", default=None)
 
 
 class GateError(Exception):
@@ -71,11 +68,10 @@ def config_data() -> dict:
 
 def load_config() -> tuple[ReviewConfig, str]:
     data = config_data()
-    language = data.get("language", "en")
-    if not isinstance(language, str) or language not in {"auto", *SUPPORTED_LANGUAGES}:
-        raise GateError(t("language must be auto, en or zh_CN"))
-    set_language(language, override=_language_override.get())
-    allowed = {"codex", "model", "timeout_seconds", "cache_dir", "makepkg", "language"}
+    # Ignore the obsolete setting in existing configs; only startup LANG
+    # selects the language, so upgrades do not require manual config cleanup.
+    data.pop("language", None)
+    allowed = {"codex", "model", "timeout_seconds", "cache_dir", "makepkg"}
     if data.keys() - allowed:
         raise GateError(t('Unknown configuration fields: ') + ", ".join(sorted(data.keys() - allowed)))
     for key in ("codex", "model", "cache_dir", "makepkg"):
@@ -89,7 +85,7 @@ def load_config() -> tuple[ReviewConfig, str]:
         raise GateError(t('cache_dir must be an absolute path'))
     return ReviewConfig(codex_command=(data.get("codex", "codex"),),
                         model=data.get("model"), timeout_seconds=timeout,
-                        cache_dir=cache, language=get_language()), data.get("makepkg", "/usr/bin/makepkg")
+                        cache_dir=cache), data.get("makepkg", "/usr/bin/makepkg")
 
 
 def session_id() -> str:
@@ -108,9 +104,6 @@ def new_session() -> str:
     private_dir(default_cache() / "builds")
     session = secrets.token_hex(16)
     session_directory(session).mkdir(mode=0o700)
-    fd = os.open(session_directory(session) / ".language", os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    with os.fdopen(fd, "w", encoding="ascii") as stream:
-        stream.write(get_language() + "\n")
     return session
 
 
@@ -344,11 +337,7 @@ def makepkg_gate(argv: list[str]) -> int:
 
 
 def makepkg_main() -> int:
-    def dispatch() -> int:
-        select_config_language()
-        return makepkg_gate(sys.argv[1:])
-    with use_language(resolve_language()):
-        return run_safely(dispatch)
+    return run_safely(lambda: makepkg_gate(sys.argv[1:]))
 
 
 def run_safely(action) -> int:
@@ -362,41 +351,17 @@ def run_safely(action) -> int:
         return 1
 
 
-def select_config_language(override: str | None = None) -> str:
-    language = config_data().get("language", "en")
-    if not isinstance(language, str) or language not in {"auto", *SUPPORTED_LANGUAGES}:
-        raise GateError(t("language must be auto, en or zh_CN"))
-    return set_language(language, override=override)
-
-
 def main(argv: list[str] | None = None) -> int:
-    with use_language(resolve_language()):
-        return run_safely(lambda: _main(argv))
+    return run_safely(lambda: _main(argv))
 
 
 def _main(argv: list[str] | None = None) -> int:
-    # Extract --lang before building help so both `--lang en review` and
-    # `review --lang en` localize descriptions and argparse's own errors.
     with localized_argparse():
-        early = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-        early.add_argument("--lang")
-        selected, remaining = early.parse_known_args(argv)
-    set_language(override=selected.lang)
-    select_config_language(selected.lang)
-    token = _language_override.set(selected.lang)
-    try:
-        with localized_argparse():
-            return _parse_and_dispatch(remaining, selected.lang)
-    finally:
-        _language_override.reset(token)
+        return _parse_and_dispatch(argv)
 
 
-def _parse_and_dispatch(argv: list[str], selected_language: str | None) -> int:
+def _parse_and_dispatch(argv: list[str] | None) -> int:
     parser = argparse.ArgumentParser(description=t('Review AUR packages with Codex before yay builds them'))
-    parser.add_argument("--lang", choices=("auto", *SUPPORTED_LANGUAGES),
-                        help=t("Report and interface language (default: en)"))
-    if selected_language is not None and selected_language not in {"auto", *SUPPORTED_LANGUAGES}:
-        parser.error(t("language must be auto, en or zh_CN"))
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("session", help=t('Create an isolated yay review session (internal interface)'))
     gate = sub.add_parser("hook", help=t('yay AURPreInstall hook (internal interface)'))

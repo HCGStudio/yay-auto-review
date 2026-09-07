@@ -13,7 +13,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from yay_auto_review import cli, core
+from yay_auto_review import cli, core, i18n
 
 
 class GateTests(unittest.TestCase):
@@ -22,12 +22,14 @@ class GateTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         environment = mock.patch.dict(os.environ, {
-            "YAY_AUTO_REVIEW_LANG": "zh_CN",
             "XDG_CACHE_HOME": str(self.root / "cache"),
             "XDG_CONFIG_HOME": str(self.root / "config"),
         })
         environment.start()
         self.addCleanup(environment.stop)
+        language = mock.patch.object(i18n, "_LANGUAGE", "zh_CN")
+        language.start()
+        self.addCleanup(language.stop)
         self.session = cli.new_session()
         session_environment = mock.patch.dict(os.environ, {cli.SESSION_ENV: self.session})
         session_environment.start()

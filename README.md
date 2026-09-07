@@ -72,16 +72,18 @@ yay -S aur-package-name
 
 ## 语言 / i18n
 
-界面、提示、错误和 Codex 报告默认使用英文 `en`，不跟随系统语言；也支持显式选择简体中文 `zh_CN`。选择优先级为：命令行 `--lang` → `YAY_AUTO_REVIEW_LANG` → 配置 `language`。仅当最高优先级的显式选择为 `auto` 时，才按 `LC_ALL` → `LC_MESSAGES` → `LANG` 读取系统语言；`C`/`POSIX` 以及未支持的语言使用英文。例如，`--lang auto` 会覆盖配置中的 `language = "en"` 并跟随系统语言。AUR 包安装后的提示始终使用英文。
+界面、提示、错误和 Codex 报告仅在启动时读取一次 `LANG`，随后在进程内保持不变。`zh_CN.UTF-8` 等简体中文 locale 使用中文；未设置、空值、`C`、`POSIX` 或不支持的 locale 均回退为英文。AUR 包安装后的提示始终使用英文。
+
+不支持运行时切换语言。`LC_ALL`、`LC_MESSAGES` 和旧的 `YAY_AUTO_REVIEW_LANG` 不影响语言；旧配置中的 `language` 字段仅为兼容保留，读取时会忽略。
 
 ```sh
-yay-auto-review --lang en --help
-yay-auto-review --lang zh_CN review /path/to/package --pkgbase package
-YAY_AUTO_REVIEW_LANG=zh_CN yay -Syu
-YAY_AUTO_REVIEW_LANG=en yay -Syu
+LANG=en_US.UTF-8 yay-auto-review --help
+LANG=zh_CN.UTF-8 yay-auto-review review /path/to/package --pkgbase package
+LANG=zh_CN.UTF-8 yay -Syu
+LANG=en_US.UTF-8 yay -Syu
 ```
 
-也可以在 `~/.config/yay-auto-review/config.toml` 设置 `language = "zh_CN"`。界面、提示、错误和 Codex 报告随所选语言切换；审查缓存包含报告语言，切换语言不会复用另一语言的报告。JSON 的 `green`/`white`/`yellow`/`red` 等机器字段保持不变。
+审查缓存包含启动时确定的报告语言，不会复用另一语言的报告。JSON 的 `green`/`white`/`yellow`/`red` 等机器字段保持不变。
 
 新增语言时，在 `yay_auto_review/locales/` 添加 UTF-8 JSON 目录，并在 `i18n.py` 注册语言、名称和 `normalize_language` 别名。英文消息是稳定键，缺失或格式不匹配的翻译回退为英文；支持拆分领域目录，如 `zh_CN.installer.json`。
 
@@ -93,11 +95,11 @@ YAY_AUTO_REVIEW_LANG=en yay -Syu
 
 ```text
 正在审查 example (a3c91e5b2d01)…
-[白色] example — 开源项目，来源与上游一致，未发现恶意脚本
+● example — 开源项目，来源与上游一致，未发现恶意脚本
   依据: …
 允许构建并安装 example? [y/N]
 
-[白色] example — 开源项目，来源与上游一致，未发现恶意脚本
+● example — 开源项目，来源与上游一致，未发现恶意脚本
   跳过 review: example；上次审查未满 1 小时，AUR 提交及文件内容、策略和模型配置均未变化
 允许构建并安装 example? [y/N]
 ```
@@ -138,7 +140,6 @@ JSON 缓存只对当前用户可读写，使用文件锁和原子替换；并发
 
 ```toml
 codex = "codex"
-language = "en"
 # model = "your-model-id"
 timeout_seconds = 300
 makepkg = "/usr/bin/makepkg"

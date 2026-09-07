@@ -11,7 +11,7 @@ import time
 import unittest
 from unittest import mock
 
-from yay_auto_review import core
+from yay_auto_review import core, i18n
 
 
 def response(**changes):
@@ -33,7 +33,7 @@ def response(**changes):
 
 class RepositoryTest(unittest.TestCase):
     def setUp(self):
-        language = mock.patch.dict(os.environ, {"YAY_AUTO_REVIEW_LANG": "zh_CN"})
+        language = mock.patch.object(i18n, "_LANGUAGE", "en")
         language.start()
         self.addCleanup(language.stop)
         self.temporary = tempfile.TemporaryDirectory()

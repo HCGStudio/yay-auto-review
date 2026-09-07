@@ -175,18 +175,20 @@ class InstallerTests(unittest.TestCase):
         for language, expected in (('en', 'Review AUR packages with Codex'), ('zh_CN', 'Codex')):
             with self.subTest(language=language):
                 process = subprocess.run(
-                    [str(self.prefix / 'bin' / 'yay-auto-review'), '--lang', language, '--help'],
+                    [str(self.prefix / 'bin' / 'yay-auto-review'), '--help'],
+                    env=dict(os.environ, LANG=language + '.UTF-8', LC_ALL='C'),
                     capture_output=True, text=True, timeout=10)
                 self.assertEqual(process.returncode, 0, process.stderr)
                 self.assertIn(expected, process.stdout)
                 if language == 'zh_CN':
                     self.assertRegex(process.stdout, r'[\u4e00-\u9fff]')
 
-    def test_installed_launcher_defaults_to_english_in_chinese_locale(self):
+    def test_installed_launcher_ignores_other_language_environment_variables(self):
         self.install()
         process = subprocess.run(
             [str(self.prefix / 'bin' / 'yay-auto-review'), '--help'],
-            env=dict(os.environ, LANG='zh_CN.UTF-8', LC_ALL='zh_CN.UTF-8', YAY_AUTO_REVIEW_LANG=''),
+            env=dict(os.environ, LANG='en_US.UTF-8', LC_ALL='zh_CN.UTF-8',
+                     LC_MESSAGES='zh_CN.UTF-8', YAY_AUTO_REVIEW_LANG='zh_CN'),
             capture_output=True, text=True, timeout=10)
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertIn('Review AUR packages with Codex', process.stdout)

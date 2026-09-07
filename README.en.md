@@ -54,30 +54,25 @@ checkout cannot inject Python modules through the current directory or PYTHONPAT
 
 ## Languages
 
-English (`en`) is the default for interface messages and Codex reports, regardless
-of the system locale. Simplified Chinese (`zh_CN`) is available explicitly.
-Selection order:
+Interface messages and Codex reports read `LANG` once at startup and keep that
+language for the process lifetime. Simplified Chinese locales such as
+`zh_CN.UTF-8` select Chinese; missing, empty, `C`, `POSIX`, and unsupported locales
+fall back to English. AUR package installation instructions always use English.
 
-1. `--lang` on the command line.
-2. `YAY_AUTO_REVIEW_LANG`.
-3. `language` in the configuration file.
-
-An explicit `auto` at the highest selected priority opts into `LC_ALL`, then
-`LC_MESSAGES`, then `LANG`. `C`, `POSIX`, and unsupported locales use English.
-For example, `--lang auto` follows the system locale even when the configuration
-sets `language = "en"`. AUR package installation instructions always use English.
+`LC_ALL`, `LC_MESSAGES`, and the former `YAY_AUTO_REVIEW_LANG` variable do not
+select the language. There is no runtime language switch. Legacy `language`
+configuration entries are ignored for compatibility.
 
 ```sh
-yay-auto-review --lang en --help
-yay-auto-review --lang zh_CN review /path/to/package --pkgbase package
-YAY_AUTO_REVIEW_LANG=en yay -Syu
+LANG=en_US.UTF-8 yay-auto-review --help
+LANG=zh_CN.UTF-8 yay-auto-review review /path/to/package --pkgbase package
+LANG=en_US.UTF-8 yay -Syu
 ```
 
 Create `~/.config/yay-auto-review/config.toml` (or the corresponding
 `XDG_CONFIG_HOME` path) to configure persistent preferences:
 
 ```toml
-language = "en"
 codex = "codex"
 timeout_seconds = 300
 makepkg = "/usr/bin/makepkg"

@@ -24,10 +24,12 @@ own yay configuration.
 The installed launchers use Python's `-I` isolation flag. The wheel includes
 translation resources. The Lua plugin under `/usr/share/yay-auto-review/` uses
 absolute system launcher paths so old per-user installs do not shadow it.
-Interface messages and Codex reports default to English, independently of the
-system locale. Set `YAY_AUTO_REVIEW_LANG=zh_CN` to use Simplified Chinese, or
-explicitly select `auto` to follow the standard locale environment. The AUR
-installation instructions always use English, regardless of those settings.
+Interface messages and Codex reports read only `LANG`, once at startup, and keep
+that language for the process lifetime. Simplified Chinese locales use Chinese;
+missing, empty, `C`, `POSIX`, and unsupported locales fall back to English.
+`LC_ALL`, `LC_MESSAGES`, the former application override, and legacy `language`
+configuration entries do not change it. AUR installation instructions always
+use English.
 
 ## Build and verify
 
