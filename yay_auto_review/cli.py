@@ -179,9 +179,9 @@ def remote_head(pkgbase: str) -> str:
 
 
 def status_dot(level: str) -> str:
-    """Color only the status marker; redirected output stays escape-free."""
+    """Keep the review level visible even with NO_COLOR; logs stay plain."""
     dot = "●"
-    if sys.stderr.isatty() and "NO_COLOR" not in os.environ:
+    if sys.stderr.isatty():
         dot = f"\033[{COLORS[level]}m{dot}\033[0m"
     return dot
 

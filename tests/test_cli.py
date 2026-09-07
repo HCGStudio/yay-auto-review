@@ -423,17 +423,18 @@ class RemoteHeadTests(unittest.TestCase):
 class StatusDisplayTests(unittest.TestCase):
     def test_terminal_colors_only_the_dot_for_every_level(self):
         for level, code in (("green", "32"), ("white", "37"), ("yellow", "33"), ("red", "31")):
-            output = io.StringIO()
-            with self.subTest(level=level), mock.patch.dict(os.environ, {}, clear=True), \
-                 mock.patch.object(output, "isatty", return_value=True), contextlib.redirect_stderr(output):
-                cli.display("demo", core.ReviewResult(level, "example"))
-            self.assertEqual(output.getvalue(), f"\n\033[{code}m●\033[0m demo — example\n")
+            for env in ({}, {"NO_COLOR": ""}, {"NO_COLOR": "1"}):
+                output = io.StringIO()
+                with self.subTest(level=level, env=env), mock.patch.dict(os.environ, env, clear=True), \
+                     mock.patch.object(output, "isatty", return_value=True), contextlib.redirect_stderr(output):
+                    cli.display("demo", core.ReviewResult(level, "example"))
+                self.assertEqual(output.getvalue(), f"\n\033[{code}m●\033[0m demo — example\n")
 
-    def test_redirected_and_no_color_output_use_plain_dot(self):
-        for tty, env in ((False, {}), (True, {"NO_COLOR": ""})):
+    def test_redirected_output_uses_plain_dot(self):
+        for env in ({}, {"NO_COLOR": "1"}):
             output = io.StringIO()
-            with self.subTest(tty=tty), mock.patch.dict(os.environ, env, clear=True), \
-                 mock.patch.object(output, "isatty", return_value=tty), contextlib.redirect_stderr(output):
+            with self.subTest(env=env), mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(output, "isatty", return_value=False), contextlib.redirect_stderr(output):
                 cli.display("demo", core.ReviewResult("yellow", "example"))
             self.assertEqual(output.getvalue(), "\n● demo — example\n")
 

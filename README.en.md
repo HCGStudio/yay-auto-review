@@ -16,8 +16,10 @@ new installations, dependencies, and split packages.
 
 Evidence is required for green/white classifications. Familiar package names
 and a source hosted on GitHub alone do not establish official provenance.
-Terminal output marks each result with a colored `●` dot. Redirected output and
-`NO_COLOR` use a plain dot; color names are not printed as status labels.
+The `●` before each package name matches its review level: green, white, yellow,
+or red. These status dots stay colored in a terminal even when `NO_COLOR` is set.
+Only the dot is colored; color names are not printed as labels. Redirecting the
+review output (standard error) produces plain dots.
 
 ## Install from AUR
 

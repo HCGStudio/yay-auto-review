@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yay-auto-review"
-version = "0.3.3"
+version = "0.3.4"
 description = "Review AUR package recipes with Codex before yay builds them"
 readme = "README.md"
 requires-python = ">=3.11"
