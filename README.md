@@ -30,6 +30,8 @@ yay -Syu
 
 AUR 包依赖官方仓库的 `openai-codex`、Python 和 Git，以及 yay。兼容 `yay-bin`、`yay-git` 的 `yay` provider；启用时要求实际 yay 版本不低于 13。包管理器只安装系统文件，每位用户通过 `enable` 接入自己的 yay 配置。升级后会自动加载新的共享 Lua 插件。
 
+如果之前通过源码安装过同名命令，使用 `/usr/bin/yay-auto-review enable` 明确切换到系统安装的版本。
+
 `yay-auto-review` 是主命令，原有 `aur-auto-review` 命令仍然可用；配置和缓存目录继续使用 `aur-auto-review`，已有设置无需迁移。打包源码和维护步骤见 [packaging/aur](packaging/aur/README.md)。
 
 ### 从源码安装

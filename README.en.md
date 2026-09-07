@@ -32,6 +32,9 @@ System installation does not edit users' home directories; each user activates
 the plugin with `enable`. The per-user loader follows the shared system Lua
 plugin so upgrades take effect automatically.
 
+If a source installation already provides the same command in `~/.local/bin`,
+use `/usr/bin/yay-auto-review enable` to activate the system package explicitly.
+
 The original `aur-auto-review` command remains an alias. Existing configuration
 and cache paths keep their `aur-auto-review` names. See
 [AUR packaging](packaging/aur/README.md) for build and maintenance details.
