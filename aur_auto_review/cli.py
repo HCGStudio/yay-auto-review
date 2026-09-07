@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextvars import ContextVar
 import dataclasses
 import hashlib
 import json
@@ -18,12 +19,15 @@ import time
 import tomllib
 
 from .core import ReviewConfig, Reviewer, SnapshotError, snapshot_package
+from .i18n import (SUPPORTED_LANGUAGES, get_language, localized_argparse,
+                   resolve_language, set_language, t, use_language)
 
 SESSION_ENV = "AUR_AUTO_REVIEW_SESSION"
-LABELS = {"green": "绿色", "white": "白色", "yellow": "黄色", "red": "红色"}
+LABELS = {"green": 'Green', "white": 'White', "yellow": 'Yellow', "red": 'Red'}
 COLORS = {"green": "32", "white": "37", "yellow": "33", "red": "31"}
 NAME = re.compile(r"[a-z0-9][a-z0-9@._+\-]*\Z")
 SESSION = re.compile(r"[0-9a-f]{32}\Z")
+_language_override: ContextVar[str | None] = ContextVar("aur_cli_language", default=None)
 
 
 class GateError(Exception):
@@ -41,45 +45,58 @@ def clean_text(value: object) -> str:
 def default_cache() -> Path:
     path = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")))
     if not path.is_absolute():
-        raise GateError("XDG_CACHE_HOME 必须是绝对路径")
+        raise GateError(t('XDG_CACHE_HOME must be an absolute path'))
     return path / "aur-auto-review"
 
 
 def private_dir(path: Path) -> Path:
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     if path.is_symlink() or not path.is_dir() or path.stat().st_uid != os.getuid():
-        raise GateError(f"不安全的缓存目录: {path}")
+        raise GateError(t('Unsafe cache directory: {}', path))
     path.chmod(0o700)
     return path
 
 
-def load_config() -> tuple[ReviewConfig, str]:
+def config_data() -> dict:
     root = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
     if not root.is_absolute():
-        raise GateError("XDG_CONFIG_HOME 必须是绝对路径")
+        raise GateError(t('XDG_CONFIG_HOME must be an absolute path'))
     path = root / "aur-auto-review" / "config.toml"
-    data = tomllib.loads(path.read_text()) if path.exists() else {}
-    allowed = {"codex", "model", "timeout_seconds", "cache_dir", "makepkg"}
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except tomllib.TOMLDecodeError as exc:
+        raise GateError(t("Cannot parse configuration {}; check TOML syntax", path)) from exc
+    except (OSError, UnicodeError) as exc:
+        raise GateError(t("Cannot read UTF-8 configuration {}", path)) from exc
+
+
+def load_config() -> tuple[ReviewConfig, str]:
+    data = config_data()
+    language = data.get("language", "auto")
+    if not isinstance(language, str) or language not in {"auto", *SUPPORTED_LANGUAGES}:
+        raise GateError(t("language must be auto, en or zh_CN"))
+    set_language(language, override=_language_override.get())
+    allowed = {"codex", "model", "timeout_seconds", "cache_dir", "makepkg", "language"}
     if data.keys() - allowed:
-        raise GateError("配置含有未知字段: " + ", ".join(sorted(data.keys() - allowed)))
+        raise GateError(t('Unknown configuration fields: ') + ", ".join(sorted(data.keys() - allowed)))
     for key in ("codex", "model", "cache_dir", "makepkg"):
         if key in data and (not isinstance(data[key], str) or not data[key].strip()):
-            raise GateError(f"配置 {key} 必须为非空字符串")
+            raise GateError(t('Configuration {} must be a nonempty string', key))
     timeout = data.get("timeout_seconds", 300)
     if type(timeout) not in (int, float) or not 1 <= timeout <= 3600:
-        raise GateError("timeout_seconds 必须为 1–3600 秒")
+        raise GateError(t('timeout_seconds must be between 1 and 3600 seconds'))
     cache = Path(data.get("cache_dir", str(default_cache()))).expanduser()
     if not cache.is_absolute():
-        raise GateError("cache_dir 必须是绝对路径")
+        raise GateError(t('cache_dir must be an absolute path'))
     return ReviewConfig(codex_command=(data.get("codex", "codex"),),
                         model=data.get("model"), timeout_seconds=timeout,
-                        cache_dir=cache), data.get("makepkg", "/usr/bin/makepkg")
+                        cache_dir=cache, language=get_language()), data.get("makepkg", "/usr/bin/makepkg")
 
 
 def session_id() -> str:
     session = os.environ.get(SESSION_ENV, "")
     if not SESSION.fullmatch(session):
-        raise GateError("缺少有效的 yay 审查会话；请通过已启用插件的 yay 安装")
+        raise GateError(t('No valid yay review session; install through yay with the plugin enabled'))
     return session
 
 
@@ -92,17 +109,20 @@ def new_session() -> str:
     private_dir(default_cache() / "builds")
     session = secrets.token_hex(16)
     session_directory(session).mkdir(mode=0o700)
+    fd = os.open(session_directory(session) / ".language", os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd, "w", encoding="ascii") as stream:
+        stream.write(get_language() + "\n")
     return session
 
 
 def check_directory(directory: Path, pkgbase: str, session: str) -> Path:
     if not NAME.fullmatch(pkgbase):
-        raise GateError("非法的 AUR pkgbase")
+        raise GateError(t('Invalid AUR pkgbase'))
     expected = session_directory(session) / pkgbase
     if directory.is_symlink() or directory.resolve() != expected.absolute():
-        raise GateError("构建目录被覆盖或重定向；插件要求使用本次会话的独立构建目录")
+        raise GateError(t("Build directory was overridden or redirected; the plugin requires this session's isolated build directory"))
     if expected.parent.is_symlink() or not expected.parent.is_dir():
-        raise GateError("审查会话目录不存在或不安全")
+        raise GateError(t('Review session directory is missing or unsafe'))
     return directory.resolve()
 
 
@@ -125,19 +145,19 @@ def reject_yay_overrides() -> None:
                     if arg == "--":
                         break
                     if arg.split("=", 1)[0] in {"--makepkg", "--builddir", "--mflags", "--save"}:
-                        raise GateError(f"插件启用时不允许 {arg.split('=', 1)[0]}；它会覆盖审查隔离设置")
+                        raise GateError(t('{} is not allowed while the plugin is enabled; it would override review isolation', arg.split('=', 1)[0]))
                 return
             stat = proc.joinpath("stat").read_text()
             pid = int(stat.rsplit(")", 1)[1].split()[1])
             if pid <= 1:
                 return
         except (OSError, ValueError):
-            raise GateError("无法检查 yay 启动参数，拒绝在未知配置下安装") from None
+            raise GateError(t('Cannot inspect yay arguments; refusing installation with unknown configuration')) from None
 
 
 def remote_head(pkgbase: str) -> str:
     if not NAME.fullmatch(pkgbase):
-        raise GateError("非法的 AUR pkgbase")
+        raise GateError(t('Invalid AUR pkgbase'))
     # Ignore checkout-local and user URL rewriting/credential helpers. Never use
     # the untrusted repository's configured origin as proof of AUR freshness.
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
@@ -150,43 +170,43 @@ def remote_head(pkgbase: str) -> str:
              f"https://aur.archlinux.org/{pkgbase}.git", "HEAD"],
             cwd="/", env=env, capture_output=True, text=True, timeout=30, check=True)
     except (OSError, subprocess.SubprocessError):
-        raise GateError("无法向 AUR 核实最新提交；本次不使用缓存，也不继续安装") from None
+        raise GateError(t('Cannot verify the latest commit with AUR; cached review and installation are blocked')) from None
     fields = result.stdout.strip().split()
     if len(fields) != 2 or fields[1] != "HEAD" or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", fields[0]):
-        raise GateError("AUR 返回的 Git HEAD 无效")
+        raise GateError(t('AUR returned an invalid Git HEAD'))
     return fields[0]
 
 
 def display(pkgbase: str, result) -> None:
-    label = LABELS[result.level]
+    label = t(LABELS[result.level])
     if sys.stderr.isatty() and "NO_COLOR" not in os.environ:
         label = f"\033[{COLORS[result.level]}m{label}\033[0m"
     print(f"\n[{label}] {clean_text(pkgbase)} — {clean_text(result.summary)}", file=sys.stderr)
     if result.cached:
-        print(f"  跳过 review: {clean_text(pkgbase)}；{clean_text(result.cache_reason)}", file=sys.stderr)
+        print(t('  Review skipped: {}; {}', clean_text(pkgbase), clean_text(result.cache_reason)), file=sys.stderr)
     for finding in result.findings:
         print(f"  • {clean_text(finding)}", file=sys.stderr)
     for evidence in result.evidence:
-        print(f"  依据: {clean_text(evidence.detail)}", file=sys.stderr)
+        print(t('  Evidence: {}', clean_text(evidence.detail)), file=sys.stderr)
         for ref in evidence.references:
             print(f"    {clean_text(ref)}", file=sys.stderr)
 
 
 def confirm(pkgbase: str, level: str) -> bool:
     if level == "red":
-        print("红色结果：已阻止本次构建和安装。修复问题后重新 review。", file=sys.stderr)
+        print(t('Red result: this build and installation are blocked. Fix the issues and review again.'), file=sys.stderr)
         return False
     try:
         # yay may pipe stdin or use --noconfirm. Neither is consent to bypass
         # this gate. Always read the human decision from the controlling TTY.
         with open("/dev/tty", "r+", encoding="utf-8", buffering=1) as tty:
             if level == "yellow":
-                tty.write(f"存在其他问题，输入包名 {clean_text(pkgbase)} 才继续，回车取消: ")
+                tty.write(t('Other issues remain. Type the package name {} to continue, or press Enter to cancel: ', clean_text(pkgbase)))
                 return tty.readline().strip() == pkgbase
-            tty.write(f"允许构建并安装 {clean_text(pkgbase)}? [y/N] ")
+            tty.write(t('Allow building and installing {}? [y/N] ', clean_text(pkgbase)))
             return tty.readline().strip().lower() in {"y", "yes"}
     except OSError:
-        print("无交互终端，无法确认审查结果；已阻止安装。", file=sys.stderr)
+        print(t('No interactive terminal is available to confirm the review; installation is blocked.'), file=sys.stderr)
         return False
 
 
@@ -220,11 +240,11 @@ def write_receipt(snapshot, session: str, context: dict, started: bool = False) 
 
 def review_and_confirm(snapshot, config: ReviewConfig, context: dict):
     config = dataclasses.replace(config, cache_context=json.dumps(context, sort_keys=True))
-    print(f"正在审查 {clean_text(snapshot.pkgbase)} ({snapshot.commit[:12]})…", file=sys.stderr, flush=True)
+    print(t('Reviewing {} ({})…', clean_text(snapshot.pkgbase), snapshot.commit[:12]), file=sys.stderr, flush=True)
     result = Reviewer(config).review(snapshot)
     display(snapshot.pkgbase, result)
     if not confirm(snapshot.pkgbase, result.level):
-        raise GateError("未获用户确认，已取消安装")
+        raise GateError(t('User confirmation was not granted; installation cancelled'))
     return result
 
 
@@ -237,12 +257,12 @@ def hook(args) -> int:
     snapshot = snapshot_package(directory, args.pkgbase)
     head = remote_head(args.pkgbase)
     if snapshot.commit != head:
-        raise GateError("本地提交不是 AUR 最新提交；请重新运行 yay 下载更新后的内容")
+        raise GateError(t('Local commit is not the latest AUR commit; rerun yay to download the updated files'))
     review_and_confirm(snapshot, config, context)
     # Codex can take minutes; detect changes during review/confirmation too.
     after = snapshot_package(directory, args.pkgbase)
     if after.digest != snapshot.digest or after.commit != snapshot.commit:
-        raise GateError("审查或确认期间文件发生变化，请重新运行 yay")
+        raise GateError(t('Files changed during review or confirmation; rerun yay'))
     write_receipt(snapshot, session, context)
     return 0
 
@@ -251,7 +271,7 @@ def read_receipt(directory: Path, session: str) -> dict:
     path = receipt_path(directory, session)
     try:
         if path.is_symlink() or path.stat().st_uid != os.getuid():
-            raise GateError("审查确认记录不安全")
+            raise GateError(t('Unsafe review approval receipt'))
         data = json.loads(path.read_text())
         if (data["session"] != session or data["directory"] != str(directory)
                 or not NAME.fullmatch(data["pkgbase"])
@@ -262,7 +282,7 @@ def read_receipt(directory: Path, session: str) -> dict:
             raise ValueError()
         return data
     except (OSError, ValueError, TypeError, KeyError):
-        raise GateError("没有本次会话的有效用户确认，拒绝执行 makepkg") from None
+        raise GateError(t('No valid user approval for this session; refusing to execute makepkg')) from None
 
 
 def tracked_paths(directory: Path) -> set[str]:
@@ -285,22 +305,22 @@ def makepkg_gate(argv: list[str]) -> int:
             break
         if (arg.startswith("--pkgbuild") or arg.split("=", 1)[0] in {"--d", "--di", "--dir"}
                 or (arg.startswith("-") and not arg.startswith("--") and any(c in arg[1:] for c in "pD"))):
-            raise GateError("不允许通过 makepkg -p/-D/--dir 改用未审查脚本或目录")
+            raise GateError(t('makepkg -p/-D/--dir cannot select an unreviewed script or directory'))
     config, makepkg = load_config()
     paths = set(receipt["paths"]) | tracked_paths(directory) if receipt["started"] else None
     snapshot = snapshot_package(directory, receipt["pkgbase"], paths=paths)
     if snapshot.commit != receipt["commit"] or snapshot.digest != receipt["digest"]:
-        print("审查后的包装文件已改变，执行 makepkg 前重新 review 并确认。", file=sys.stderr)
+        print(t('Packaging files changed after review; reviewing and confirming again before makepkg.'), file=sys.stderr)
         if snapshot.commit != remote_head(snapshot.pkgbase):
-            raise GateError("AUR 提交已改变，请重新运行 yay")
+            raise GateError(t('AUR commit changed; rerun yay'))
         review_and_confirm(snapshot, config, receipt["context"])
         again = snapshot_package(directory, snapshot.pkgbase, paths=paths)
         if again.digest != snapshot.digest or again.commit != snapshot.commit:
-            raise GateError("重新审查期间文件发生变化，已停止")
+            raise GateError(t('Files changed during the repeated review; stopped'))
     write_receipt(snapshot, session, receipt["context"], started=True)
     executable = shutil.which(makepkg)
     if not executable or Path(executable).resolve() == Path(sys.argv[0]).resolve() or Path(executable).name == "aur-auto-review-makepkg":
-        raise GateError("makepkg 配置无效或递归指向审查插件")
+        raise GateError(t('Invalid makepkg configuration or recursive reference to the review plugin'))
     # makepkg applies these variable assignments AFTER makepkg.conf and any
     # user assignments. Keep both downloads and archives in this transaction:
     # a global PKGDEST must not make yay reuse binaries from an older recipe.
@@ -311,35 +331,75 @@ def makepkg_gate(argv: list[str]) -> int:
 
 
 def makepkg_main() -> int:
-    return run_safely(lambda: makepkg_gate(sys.argv[1:]))
+    def dispatch() -> int:
+        select_config_language()
+        return makepkg_gate(sys.argv[1:])
+    with use_language(resolve_language()):
+        return run_safely(dispatch)
 
 
 def run_safely(action) -> int:
     try:
         return action()
     except KeyboardInterrupt:
-        print("\n审查已取消，停止安装。", file=sys.stderr)
+        print(t('\nReview cancelled; installation stopped.'), file=sys.stderr)
         return 130
     except (GateError, SnapshotError, OSError, ValueError, subprocess.SubprocessError) as exc:
-        print(f"[红色] {clean_text(exc)}", file=sys.stderr)
+        print(t('[Red] {}', clean_text(exc)), file=sys.stderr)
         return 1
 
 
+def select_config_language(override: str | None = None) -> str:
+    language = config_data().get("language", "auto")
+    if not isinstance(language, str) or language not in {"auto", *SUPPORTED_LANGUAGES}:
+        raise GateError(t("language must be auto, en or zh_CN"))
+    return set_language(language, override=override)
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="在 yay 构建 AUR 软件包前调用 Codex 审查")
+    with use_language(resolve_language()):
+        return run_safely(lambda: _main(argv))
+
+
+def _main(argv: list[str] | None = None) -> int:
+    # Extract --lang before building help so both `--lang en review` and
+    # `review --lang en` localize descriptions and argparse's own errors.
+    with localized_argparse():
+        early = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+        early.add_argument("--lang")
+        selected, remaining = early.parse_known_args(argv)
+    set_language(override=selected.lang)
+    select_config_language(selected.lang)
+    token = _language_override.set(selected.lang)
+    try:
+        with localized_argparse():
+            return _parse_and_dispatch(remaining, selected.lang)
+    finally:
+        _language_override.reset(token)
+
+
+def _parse_and_dispatch(argv: list[str], selected_language: str | None) -> int:
+    parser = argparse.ArgumentParser(description=t('Review AUR packages with Codex before yay builds them'))
+    parser.add_argument("--lang", choices=("auto", *SUPPORTED_LANGUAGES),
+                        help=t("Report and interface language (default: auto)"))
+    if selected_language is not None and selected_language not in {"auto", *SUPPORTED_LANGUAGES}:
+        parser.error(t("language must be auto, en or zh_CN"))
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("session", help="为 yay 创建独立审查会话（内部接口）")
-    gate = sub.add_parser("hook", help="yay AURPreInstall 钩子（内部接口）")
+    sub.add_parser("session", help=t('Create an isolated yay review session (internal interface)'))
+    gate = sub.add_parser("hook", help=t('yay AURPreInstall hook (internal interface)'))
     gate.add_argument("--pkgbase", required=True)
     gate.add_argument("--directory", required=True)
     gate.add_argument("--last-modified", type=int, required=True)
     gate.add_argument("--version", required=True)
-    review = sub.add_parser("review", help="只审查本地 AUR Git 仓库，不安装")
+    review = sub.add_parser("review", help=t('Review a local AUR Git repository without installing'))
     review.add_argument("directory", type=Path)
     review.add_argument("--pkgbase", required=True)
-    review.add_argument("--json", action="store_true", help="输出结构化结果")
-    installer = sub.add_parser("install", help="安装当前源码和 yay Lua 插件到用户目录")
+    review.add_argument("--json", action="store_true", help=t('Print structured JSON results'))
+    installer = sub.add_parser("install", help=t('Install the current source and yay Lua plugin to a user directory'))
     installer.add_argument("--prefix", type=Path, default=Path.home() / ".local")
+    enable = sub.add_parser("enable", help=t("Enable the installed yay plugin for the current user"))
+    enable.add_argument("--prefix", type=Path, default=None)
+    sub.add_parser("disable", help=t("Disable the yay plugin for the current user"))
     args = parser.parse_args(argv)
 
     def dispatch() -> int:
@@ -352,10 +412,18 @@ def main(argv: list[str] | None = None) -> int:
             from .installer import install
             install(args.prefix)
             return 0
+        if args.command == "enable":
+            from .installer import enable
+            enable(args.prefix)
+            return 0
+        if args.command == "disable":
+            from .installer import disable
+            disable()
+            return 0
         config, _ = load_config()
         snapshot = snapshot_package(args.directory, args.pkgbase)
         if snapshot.commit != remote_head(args.pkgbase):
-            raise GateError("本地提交不是 AUR 最新提交，请先更新仓库")
+            raise GateError(t('Local commit is not the latest AUR commit; update the repository first'))
         result = Reviewer(config).review(snapshot)
         if args.json:
             print(json.dumps(dataclasses.asdict(result), ensure_ascii=False, indent=2))

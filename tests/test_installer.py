@@ -62,9 +62,12 @@ class InstallerTests(unittest.TestCase):
         self.install()
         self.assertTrue(self.init.is_file())
         self.assertEqual(list(self.init.parent.glob("init.lua.bak.*")), [])
-        for name in ("aur-auto-review", "aur-auto-review-makepkg"):
+        for name in ("yay-auto-review", "aur-auto-review", "aur-auto-review-makepkg"):
             self.assertTrue(os.access(self.prefix / "bin" / name, os.X_OK))
-        plugin = (self.init.parent / "aur-auto-review.lua").read_text(encoding="utf-8")
+        shared_plugin = self.prefix / "share" / "aur-auto-review" / "aur-auto-review.lua"
+        loader = (self.init.parent / "aur-auto-review.lua").read_text(encoding="utf-8")
+        self.assertIn(str(shared_plugin), loader)
+        plugin = shared_plugin.read_text(encoding="utf-8")
         self.assertIn(str(self.prefix / "bin" / "aur-auto-review"), plugin)
         self.assertIn(str(self.prefix / "bin" / "aur-auto-review-makepkg"), plugin)
 
@@ -128,6 +131,74 @@ class InstallerTests(unittest.TestCase):
                 self.assertEqual(process.returncode, expected, process.stderr)
                 self.assertFalse(marker.exists())
                 self.assertNotIn("package injected", process.stderr)
+
+    def test_disable_preserves_other_configuration_and_can_reenable(self):
+        original = '-- custom prefix\nyay.opt.editor = "vim"\n'
+        self.init.write_text(original)
+        self.install()
+        suffix = '\n-- custom suffix\n'
+        with self.init.open('a') as stream:
+            stream.write(suffix)
+        with contextlib.redirect_stdout(io.StringIO()):
+            installer.disable()
+        disabled = self.init.read_text()
+        self.assertEqual(disabled, original + suffix)
+        backups = list(self.init.parent.glob('init.lua.bak.*'))
+        with contextlib.redirect_stdout(io.StringIO()):
+            installer.disable()
+        self.assertEqual(self.init.read_text(), disabled)
+        self.assertEqual(list(self.init.parent.glob('init.lua.bak.*')), backups)
+        with contextlib.redirect_stdout(io.StringIO()):
+            installer.enable(self.prefix)
+        self.assertIn(installer.BEGIN, self.init.read_text())
+        self.assertIn(suffix, self.init.read_text())
+
+    def test_enable_uses_shared_plugin_without_copying_its_version(self):
+        self.install()
+        shared = self.prefix / 'share' / 'aur-auto-review' / 'aur-auto-review.lua'
+        loader = self.init.parent / 'aur-auto-review.lua'
+        original_loader = loader.read_text()
+        with shared.open('a') as stream:
+            stream.write('\n-- package manager update\n')
+        with contextlib.redirect_stdout(io.StringIO()):
+            installer.enable(self.prefix)
+        self.assertEqual(loader.read_text(), original_loader)
+        self.assertNotIn('package manager update', loader.read_text())
+        self.assertIn(str(shared), loader.read_text())
+
+    def test_locales_are_copied_and_installed_alias_supports_both_languages(self):
+        self.install()
+        locale_file = self.prefix / 'share' / 'aur-auto-review' / 'python' / 'aur_auto_review' / 'locales' / 'zh_CN.json'
+        self.assertTrue(locale_file.is_file())
+        for language, expected in (('en', 'Review AUR packages with Codex'), ('zh_CN', 'Codex')):
+            with self.subTest(language=language):
+                process = subprocess.run(
+                    [str(self.prefix / 'bin' / 'yay-auto-review'), '--lang', language, '--help'],
+                    capture_output=True, text=True, timeout=10)
+                self.assertEqual(process.returncode, 0, process.stderr)
+                self.assertIn(expected, process.stdout)
+                if language == 'zh_CN':
+                    self.assertRegex(process.stdout, r'[\u4e00-\u9fff]')
+
+    def test_enable_requires_existing_package_and_regular_user(self):
+        with self.assertRaises(cli.GateError):
+            installer.enable(self.prefix)
+        self.install()
+        before = self.init.read_bytes()
+        with mock.patch.object(installer.os, 'geteuid', return_value=0), self.assertRaises(cli.GateError):
+            installer.enable(self.prefix)
+        self.assertEqual(self.init.read_bytes(), before)
+
+    def test_installed_source_alias_detects_prefix_when_reenabling(self):
+        self.install()
+        alias = self.prefix / 'bin' / 'yay-auto-review'
+        for command in ('disable', 'enable'):
+            process = subprocess.run([str(alias), command], capture_output=True,
+                                     text=True, timeout=10)
+            self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertIn(installer.BEGIN, self.init.read_text())
+        self.assertIn(str(self.prefix / 'share' / 'aur-auto-review' / 'aur-auto-review.lua'),
+                      (self.init.parent / 'aur-auto-review.lua').read_text())
 
     def test_installed_session_helper_creates_private_directory_and_prints_only_token(self):
         self.install()

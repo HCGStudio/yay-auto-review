@@ -1,0 +1,16 @@
+{
+  "yay >= 13.0.0 with native Lua hooks is required": "需要 yay >= 13.0.0 的原生 Lua 钩子",
+  "Please update Codex CLI; this version lacks {option}": "请更新 Codex CLI；当前版本缺少 {option}",
+  "Run activation as your regular user, without sudo": "请以普通用户运行启用或禁用命令，不要使用 sudo",
+  "XDG_CONFIG_HOME must be an absolute path": "XDG_CONFIG_HOME 必须是绝对路径",
+  "The managed markers in init.lua are incomplete; repair them before retrying": "init.lua 的插件托管标记不完整，请先修复后重试",
+  "Previous configuration backed up to: {path}": "已备份原配置: {path}",
+  "Review is enabled in {path}": "已在 {path} 启用审查",
+  "Run yay -Syu as usual. Reviews use your current Codex login.": "现在直接运行 yay -Syu 即可。审查会使用当前 Codex 登录状态。",
+  "Shared Lua plugin not found at {path}; install yay-auto-review first": "未找到共享 Lua 插件 {path}，请先安装 yay-auto-review",
+  "Required launcher is missing: {path}": "缺少必要的启动器: {path}",
+  "Review is already disabled; no managed activation stanza was found": "未找到托管的启用配置，审查当前已禁用",
+  "Review is disabled. Other yay settings and review history were preserved.": "已禁用审查，保留了其他 yay 设置和审查历史。",
+  "Run ./install.sh from the source checkout; for a packaged install, run yay-auto-review enable": "请在源码目录运行 ./install.sh；通过软件包安装后请运行 yay-auto-review enable",
+  "Programs installed to {path}": "程序已安装到 {path}"
+}

@@ -1,5 +1,9 @@
 # ~/.config/aur-auto-review/config.toml
 # Codex CLI must already be logged in (codex login).
+# UI and Codex report language: auto, en or zh_CN.
+# Priority: --lang > AUR_AUTO_REVIEW_LANG > language > LC_ALL > LC_MESSAGES > LANG.
+# C/POSIX and unsupported locales use English. Language changes invalidate cache.
+language = "auto"
 codex = "codex"
 # Unset uses the Codex CLI default model. User config is not loaded.
 # model = "your-model-id"

@@ -1,6 +1,8 @@
-# aur-auto-review
+# yay-auto-review
 
-在 **yay 执行 AUR 的 PKGBUILD 之前**调用 Codex 静态审查，展示中文结果，用户确认后才允许构建安装。支持 `yay -Syu`、指定 AUR 包安装、AUR 依赖与 split package；同一个 pkgbase 只审查一次。
+[English](README.en.md) | 简体中文
+
+在 **yay 执行 AUR 的 PKGBUILD 之前**调用 Codex 静态审查，以英文或简体中文展示结果，用户确认后才允许构建安装。支持 `yay -Syu`、指定 AUR 包安装、AUR 依赖与 split package；同一个 pkgbase 只审查一次。
 
 使用 yay ≥ 13.0.0 的原生 Lua `AURPreInstall` 钩子，无需修改 yay 源码。
 
@@ -14,6 +16,23 @@
 “知名”由 Codex 提供声誉依据；项目名或托管平台本身不能证明来源官方。插件要求绿色/白色具有开源、官方来源、声誉及脚本安全证据，并检查结构化结果之间是否一致。证据不足时降为黄色。
 
 ## 安装
+
+### 从 AUR 安装
+
+包名与仓库名一致：`yay-auto-review`。
+
+```sh
+yay -S yay-auto-review
+codex login                 # 如尚未登录
+yay-auto-review enable      # 以普通用户启用，不要 sudo
+yay -Syu
+```
+
+AUR 包依赖官方仓库的 `openai-codex`、Python 和 Git，以及 yay。兼容 `yay-bin`、`yay-git` 的 `yay` provider；启用时要求实际 yay 版本不低于 13。包管理器只安装系统文件，每位用户通过 `enable` 接入自己的 yay 配置。升级后会自动加载新的共享 Lua 插件。
+
+`yay-auto-review` 是主命令，原有 `aur-auto-review` 命令仍然可用；配置和缓存目录继续使用 `aur-auto-review`，已有设置无需迁移。打包源码和维护步骤见 [packaging/aur](packaging/aur/README.md)。
+
+### 从源码安装
 
 需要 Arch Linux、yay ≥ 13.0.0、Python ≥ 3.11、Git，以及支持 `codex exec --output-schema --ignore-user-config --ignore-rules --ephemeral` 的 Codex CLI。Python 部分只使用标准库，不需要 pip 或 API SDK。
 
@@ -32,7 +51,7 @@ codex login
 安装器会：
 
 - 将程序安装到 `~/.local/bin/`，库放在 `~/.local/share/aur-auto-review/`。
-- 将 Lua 插件写入 `$XDG_CONFIG_HOME/yay/aur-auto-review.lua`，默认 `~/.config/yay/aur-auto-review.lua`。
+- 将 Lua 插件放入安装前缀的 `share/aur-auto-review/`，并在 `$XDG_CONFIG_HOME/yay/aur-auto-review.lua`（默认 `~/.config/yay/aur-auto-review.lua`）生成指向共享插件的加载器。
 - 在 `init.lua` 末尾添加托管的 `dofile(...)` 段；保留其他设置，修改已有配置前生成带时间戳的备份。重复安装会更新已有托管段。
 - 使用绝对程序路径及 Python `-I` 启动器，避免从 AUR 构建目录加载同名 Python 模块。
 
@@ -45,7 +64,22 @@ yay -S aur-package-name
 
 插件会审查本次计划中的每个 AUR pkgbase；官方仓库包仍由 yay/pacman 正常处理。审查失败可能发生在部分官方仓库操作之后，不意味着整项系统更新已回滚。
 
-如需其他安装前缀：`./install.sh --prefix /absolute/path`。`install` 子命令需要从源码目录运行。也可以构建 Python wheel；wheel 安装后，将 `share/aur-auto-review/aur-auto-review.lua` 放进 yay 配置目录并在 `init.lua` 中 `require("aur-auto-review")`，确保两个命令均在 PATH。
+如需其他安装前缀：`./install.sh --prefix /absolute/path`。`install` 子命令需要从源码目录运行。已安装的程序可通过 `yay-auto-review enable` / `yay-auto-review disable` 启用或禁用。
+
+## 语言 / i18n
+
+支持英文 `en` 和简体中文 `zh_CN`，默认 `auto` 跟随系统环境。选择优先级为：命令行 `--lang` → `AUR_AUTO_REVIEW_LANG` → 配置 `language` → `LC_ALL` → `LC_MESSAGES` → `LANG` → 英文。`C`/`POSIX` 以及未支持的系统语言使用英文。
+
+```sh
+yay-auto-review --lang en --help
+yay-auto-review --lang zh_CN review /path/to/package --pkgbase package
+AUR_AUTO_REVIEW_LANG=zh_CN yay -Syu
+AUR_AUTO_REVIEW_LANG=en yay -Syu
+```
+
+也可以在 `~/.config/aur-auto-review/config.toml` 设置 `language = "zh_CN"`。界面、提示、错误和 Codex 报告随所选语言切换；审查缓存包含报告语言，切换语言不会复用另一语言的报告。JSON 的 `green`/`white`/`yellow`/`red` 等机器字段保持不变。
+
+新增语言时，在 `aur_auto_review/locales/` 添加 UTF-8 JSON 目录，并在 `i18n.py` 注册语言、名称和 `normalize_language` 别名。英文消息是稳定键，缺失或格式不匹配的翻译回退为英文；支持拆分领域目录，如 `zh_CN.installer.json`。
 
 ## 使用体验
 
@@ -100,6 +134,7 @@ JSON 缓存只对当前用户可读写，使用文件锁和原子替换；并发
 
 ```toml
 codex = "codex"
+language = "auto"
 # model = "your-model-id"
 timeout_seconds = 300
 makepkg = "/usr/bin/makepkg"
@@ -129,7 +164,7 @@ python3 -m unittest discover -s tests -v
 
 ## 卸载
 
-从 yay 的 `init.lua` 删除 `-- BEGIN aur-auto-review (managed)` 至 `-- END aur-auto-review (managed)` 段，或移除手动添加的 `require`。再删除安装器写入的 Lua 文件、两个启动器和 `~/.local/share/aur-auto-review/`。缓存可在没有构建运行时另行清理；其他 yay 设置无需改动。
+先以普通用户运行 `yay-auto-review disable`，再通过包管理器卸载 `yay-auto-review`。源码安装则删除安装器写入的加载器、三个启动器和 `~/.local/share/aur-auto-review/`。禁用操作只移除托管配置段，保留其他 yay 设置和审查历史。手动接入过 `require`/`dofile` 的用户需要自行移除对应行。缓存可在没有构建运行时另行清理。
 
 ## 许可证
 

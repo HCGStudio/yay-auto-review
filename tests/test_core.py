@@ -33,6 +33,9 @@ def response(**changes):
 
 class RepositoryTest(unittest.TestCase):
     def setUp(self):
+        language = mock.patch.dict(os.environ, {"AUR_AUTO_REVIEW_LANG": "zh_CN"})
+        language.start()
+        self.addCleanup(language.stop)
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name)

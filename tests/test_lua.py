@@ -58,7 +58,7 @@ class LuaHookTests(unittest.TestCase):
         """ + body
         return subprocess.run(
             [LUA, "-"], input=harness, text=True, errors="replace", capture_output=True,
-            env=env, timeout=10,
+            env=dict(os.environ, AUR_AUTO_REVIEW_LANG="en") if env is None else env, timeout=10,
         )
 
     def test_approvals_accept_only_explicit_success(self):
@@ -112,6 +112,30 @@ class LuaHookTests(unittest.TestCase):
             process = self.run_hook("callback(event)", env=dict(os.environ, PATH=temp))
             self.assertNotEqual(process.returncode, 0)
             self.assertIn("ABORT:", process.stderr)
+
+    def test_lua_errors_follow_environment_and_posix_precedence(self):
+        cases = [
+            ({"AUR_AUTO_REVIEW_LANG": "zh_CN", "LC_ALL": "C"}, "缺少 AURPreInstall"),
+            ({"AUR_AUTO_REVIEW_LANG": "", "LC_ALL": "C", "LANG": "zh_CN"}, "missing AURPreInstall"),
+            ({"AUR_AUTO_REVIEW_LANG": "", "LC_ALL": "", "LC_MESSAGES": "zh_CN", "LANG": "en"}, "缺少 AURPreInstall"),
+            ({"AUR_AUTO_REVIEW_LANG": "fr", "LC_ALL": "zh_CN"}, "missing AURPreInstall"),
+        ]
+        for variables, message in cases:
+            with self.subTest(variables=variables):
+                process = self.run_hook("callback(nil)", env=dict(os.environ, **variables))
+                self.assertNotEqual(process.returncode, 0)
+                self.assertIn(message, process.stderr)
+
+    def test_lua_uses_language_selected_by_session_helper(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary) / "aur-auto-review" / "builds" / ("a" * 32)
+            directory.mkdir(parents=True)
+            (directory / ".language").write_text("zh_CN\n", encoding="ascii")
+            process = self.run_hook("callback(nil)", env=dict(
+                os.environ, AUR_AUTO_REVIEW_LANG="en", XDG_CACHE_HOME=temporary,
+            ))
+            self.assertNotEqual(process.returncode, 0)
+            self.assertIn("缺少 AURPreInstall", process.stderr)
 
     def test_corrupt_metadata_aborts_before_shell(self):
         cases = [
@@ -206,7 +230,7 @@ class NativeYayConfigTests(unittest.TestCase):
             )
             result = subprocess.run(
                 ["yay", "-Pg"], text=True, capture_output=True, timeout=10,
-                env=dict(os.environ, XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp,
+                env=dict(os.environ, AUR_AUTO_REVIEW_LANG="en", XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp,
                          PATH=str(binary_dir) + os.pathsep + os.environ["PATH"]),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -235,7 +259,7 @@ class NativeYayConfigTests(unittest.TestCase):
                 with self.subTest(argument=argument):
                     result = subprocess.run(
                         ["yay", "-Pg", argument], text=True, capture_output=True, timeout=10,
-                        env=dict(os.environ, XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp),
+                        env=dict(os.environ, AUR_AUTO_REVIEW_LANG="en", XDG_CONFIG_HOME=temp, XDG_CACHE_HOME=temp),
                     )
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("unsupported override", result.stderr)

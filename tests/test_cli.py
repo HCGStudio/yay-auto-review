@@ -22,6 +22,7 @@ class GateTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         environment = mock.patch.dict(os.environ, {
+            "AUR_AUTO_REVIEW_LANG": "zh_CN",
             "XDG_CACHE_HOME": str(self.root / "cache"),
             "XDG_CONFIG_HOME": str(self.root / "config"),
         })
